@@ -17,7 +17,7 @@ from requests.exceptions import RequestException
 from bs4 import BeautifulSoup
 from io import BytesIO
 from PIL import Image
-from tqdm import tqdm
+from tqdm.rich import tqdm
 
 from .epub import build_epub
 from .model import Book, Chapter
@@ -144,7 +144,7 @@ class EsjzoneDownloader:
             max_retries = 2
             for attempt in range(max_retries + 1):
                 try:
-                    logger.info(f"正在下载图片 (第 {attempt + 1} 次尝试): {src}")
+                    logger.info(f"正在下载图片 ⌈ 第 {attempt + 1} 次尝试 ⌋: {src}")
                     # 直接调用 download_image，它内部捕获了异常返回 None，这里需要判断
                     img_data = self.download_image(src)
                     
@@ -383,7 +383,7 @@ class EsjzoneDownloader:
             max_retries = 2
             for attempt in range(max_retries + 1):
                 try:
-                    logger.info(f"正在下载封面 (第 {attempt + 1} 次尝试): {book.cover_url}")
+                    logger.info(f"正在下载封面 ⌈ 第 {attempt + 1} 次尝试 ⌋: {book.cover_url}")
                     img_data = self.download_image(book.cover_url)
                     
                     if not img_data:
@@ -475,7 +475,7 @@ class EsjzoneDownloader:
                             
                     except Exception as e:
                         if attempt < max_retries:
-                            logger.warning(f"章节 '{chapter.title}' 下载失败 (第 {attempt + 1} 次尝试): {e}, 正在重试...")
+                            logger.warning(f"章节 '{chapter.title}' 下载失败 ⌈ 第 {attempt + 1} 次尝试 ⌋: {e}, 正在重试...")
                             time.sleep(1) # 稍作等待
                         else:
                             logger.error(f"章节 '{chapter.title}' 下载失败: {e}, 已达到最大重试次数，跳过。")

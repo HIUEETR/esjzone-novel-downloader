@@ -45,9 +45,9 @@ def edit_account_menu():
         ]
         
         choice = questionary.select(
-            f"账号设置 (当前账号: {current_username})",
+            f"账号设置 ⌈ 当前账号: {current_username} ⌋",
             choices=choices,
-            instruction="(使用方向键选择)"
+            instruction="⌈ 使用↑↓选择 ⌋"
         ).ask()
         
         if choice == "修改账号":
@@ -70,17 +70,17 @@ def edit_download_menu():
         clear_screen()
         dl_config = config.get('download', {})
         choices = [
-            f"修改下载目录 (当前: {dl_config.get('dir')})",
-            f"修改下载格式 (当前: {dl_config.get('download_format')})",
-            f"修改命名模式 (当前: {dl_config.get('naming_mode')})",
-            f"修改是否创建子目录 (当前: {dl_config.get('use_book_dir')})",
+            f"修改下载目录 ⌈ 当前: {dl_config.get('dir', 'downloads')} ⌋",
+            f"修改下载格式 ⌈ 当前: {dl_config.get('download_format', 'epub')} ⌋",
+            f"修改命名模式 ⌈ 当前: {dl_config.get('naming_mode', 'book_name')} ⌋",
+            f"修改是否创建子目录 ⌈ 当前: {dl_config.get('use_book_dir', False)} ⌋",
             "返回上一级菜单"
         ]
         
         choice = questionary.select(
             "下载设置",
             choices=choices,
-            instruction="(使用方向键选择)"
+            instruction="⌈ 使用↑↓选择 ⌋"
         ).ask()
         
         if choice.startswith("修改下载目录"):
@@ -93,7 +93,7 @@ def edit_download_menu():
                 "请选择下载格式：",
                 choices=["epub", "txt"],
                 default=dl_config.get('download_format', 'epub'),
-                instruction="(使用方向键选择)"
+                instruction="⌈ 使用↑↓选择 ⌋"
             ).ask()
             if val:
                 config.set('download.download_format', val)
@@ -103,7 +103,7 @@ def edit_download_menu():
                 "请选择命名模式：",
                 choices=["book_name", "number"],
                 default=dl_config.get('naming_mode', 'book_name'),
-                instruction="(使用方向键选择)"
+                instruction="⌈ 使用↑↓选择 ⌋"
             ).ask()
             if val:
                 config.set('download.naming_mode', val)
@@ -123,16 +123,16 @@ def edit_log_menu():
         clear_screen()
         log_config = config.get('log', {})
         choices = [
-            f"修改日志级别 (当前: {log_config.get('level')})",
-            f"修改日志目录 (当前: {log_config.get('dir')})",
-            f"修改保留天数 (当前: {log_config.get('retention')})",
+            f"修改日志级别 ⌈ 当前: {log_config.get('level')} ⌋",
+            f"修改日志目录 ⌈ 当前: {log_config.get('dir')} ⌋",
+            f"修改保留天数 ⌈ 当前: {log_config.get('retention')} ⌋",
             "返回上一级菜单"
         ]
         
         choice = questionary.select(
             "日志设置",
             choices=choices,
-            instruction="(使用方向键选择)"
+            instruction="⌈ 使用↑↓选择 ⌋"
         ).ask()
         
         if choice.startswith("修改日志级别"):
@@ -140,7 +140,7 @@ def edit_log_menu():
                 "请选择日志级别：",
                 choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
                 default=log_config.get('level', 'INFO'),
-                instruction="(使用方向键选择)"
+                instruction="⌈ 使用↑↓选择 ⌋"
             ).ask()
             if val:
                 config.set('log.level', val)
@@ -163,14 +163,14 @@ def edit_cookie_menu():
         clear_screen()
         cookie_config = config.get('cookie', {})
         choices = [
-            f"修改 Cookie 路径 (当前: {cookie_config.get('path')})",
+            f"修改 Cookie 路径 ⌈ 当前: {cookie_config.get('path')} ⌋",
             "返回上一级菜单"
         ]
         
         choice = questionary.select(
             "Cookie 设置",
             choices=choices,
-            instruction="(使用方向键选择)"
+            instruction="⌈ 使用↑↓选择 ⌋"
         ).ask()
         
         if choice.startswith("修改 Cookie 路径"):
@@ -193,7 +193,7 @@ def edit_config_menu():
                 "编辑 Cookie 设置",
                 "返回上一级菜单"
             ],
-            instruction="(使用方向键选择)"
+            instruction="⌈ 使用↑↓选择 ⌋"
         ).ask()
         
         if choice == "编辑账号密码":
@@ -217,11 +217,11 @@ def function_menu(downloader):
                 "返回上一级菜单",
                 "退出"
             ],
-            instruction="(使用方向键选择)"
+            instruction="⌈ 使用↑↓选择 ⌋"  
         ).ask()
         
         if choice == "从网址获取小说":
-            url = questionary.text("请输入小说网址：").ask()
+            url = questionary.text(f"请输入小说网址：⌈ https://www.esjzone.one/detail/123456789.html ⌋").ask()
             if url:
                 # 显示当前下载配置
                 download_config = config.get('download')
@@ -249,7 +249,7 @@ def main_menu(downloader, username=None):
                 "编辑配置文件",
                 "退出"
             ],
-            instruction="(使用方向键选择)"
+            instruction="⌈ 使用↑↓选择 ⌋"
         ).ask()
         
         if choice == "进入功能界面":
@@ -271,7 +271,7 @@ def run_cli():
     username = downloader.validate_cookie()
     
     if username:
-        logger.info(f"欢迎回来, {username} (Cookie 有效)")
+        logger.info(f"欢迎回来, {username} ⌈ Cookie 有效 ⌋")
     else:
         # 检查是否有保存的凭证
         stored_user = config.account.get('username')
