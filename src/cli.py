@@ -221,7 +221,8 @@ def function_menu(downloader):
         ).ask()
         
         if choice == "从网址获取小说":
-            url = questionary.text(f"请输入小说网址：⌈ https://www.esjzone.one/detail/123456789.html ⌋").ask()
+            
+            url = questionary.text("格式为 https://www.esjzone.one/detail/123456789.html\n请输入小说网址：").ask()
             if url:
                 # 显示当前下载配置
                 download_config = config.get('download')

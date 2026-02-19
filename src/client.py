@@ -123,7 +123,11 @@ class EsjzoneDownloader:
         soup = BeautifulSoup(html_content, "html.parser")
         images = {}
         
-        for img in soup.find_all("img"):
+        img_tags = soup.find_all("img")
+        if not img_tags:
+            return str(soup), images
+
+        for img in tqdm(img_tags, desc="处理插图", leave=False):
             src = img.get("src")
             if not src:
                 continue
@@ -144,7 +148,7 @@ class EsjzoneDownloader:
             max_retries = 2
             for attempt in range(max_retries + 1):
                 try:
-                    logger.info(f"正在下载图片 ⌈ 第 {attempt + 1} 次尝试 ⌋: {src}")
+                    logger.debug(f"正在下载图片 (第 {attempt + 1} 次尝试): {src}")
                     # 直接调用 download_image，它内部捕获了异常返回 None，这里需要判断
                     img_data = self.download_image(src)
                     
