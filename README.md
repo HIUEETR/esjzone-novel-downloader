@@ -1,0 +1,88 @@
+# ESJ Zone Novel Downloader
+
+一个用于从 ESJ Zone 下载小说的命令行工具。
+
+## ✨ 功能特点
+
+- **多格式支持**: 支持下载为 EPUB 和 TXT 格式。
+- **交互式界面**: 简单易用的命令行交互菜单。
+- **自定义配置**:
+  - 自定义下载目录
+  - 自定义文件命名方式（书名或编号）
+  - 自动创建书籍子目录
+- **账号管理**: 支持设置账号密码（用于访问受限内容）。
+- **日志记录**: 详细的日志记录，方便排查问题。
+- **现代化依赖管理**: 使用 `uv` 进行极速依赖安装和环境管理。
+
+## 🚀 快速开始
+
+### 前置要求
+
+- Python 3.13 或更高版本
+- Windows 操作系统 (推荐)
+
+### 安装与运行
+
+本项目提供了一个全自动启动脚本 `start.bat`，它可以自动处理依赖安装和程序启动。
+
+1. **下载项目代码**
+
+   ```bash
+   git clone <repository-url>
+   cd esjzone-novel-downloader
+   ```
+2. **运行启动脚本**
+   双击运行 `start.bat` 或在命令行中执行：
+
+   ```cmd
+   start.bat
+   ```
+
+   脚本会自动检测环境：
+
+   - 如果存在 `requirements.txt`，将使用 `pip` 安装依赖并运行。
+   - 如果不存在 `requirements.txt` (默认情况)，将自动使用 `uv` (现代化的 Python 包管理器) 来管理依赖并运行。如果未安装 `uv`，脚本会尝试自动安装。
+
+### 手动运行 (如果不使用 start.bat)
+
+如果你更喜欢手动管理：
+
+**使用 uv (推荐):**
+
+```bash
+# 安装 uv (如果尚未安装)
+pip install uv
+
+# 运行程序 (自动处理虚拟环境和依赖)
+uv run main.py
+```
+
+**使用 pip:**
+由于项目默认使用 `pyproject.toml` 管理依赖，如果必须使用 pip，你需要手动安装依赖：
+
+```bash
+pip install beautifulsoup4 colorama loguru pillow pyyaml questionary requests ruamel.yaml
+python main.py
+```
+
+## ⚙️ 配置说明
+
+程序首次运行时会自动生成 `config.yaml` 配置文件。你可以通过 CLI 菜单修改配置，也可以直接编辑该文件。
+
+主要配置项：
+
+- **account**: 账号信息 (username, password)
+- **download**:
+  - `dir`: 下载目录 (默认为 `downloads`)
+  - `format`: 下载格式 (`epub` 或 `txt`)
+  - `naming_mode`: 命名模式 (`book_name` 或 `number`)
+  - `use_book_dir`: 是否为每本书创建独立文件夹
+- **log**: 日志级别和保存路径
+
+## 🛠️ 开发与贡献
+
+本项目使用 `uv` 进行依赖管理。
+
+## 📄 许可证
+
+MIT License
