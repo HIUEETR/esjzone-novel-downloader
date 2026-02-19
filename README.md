@@ -100,6 +100,10 @@ python main.py
 * [X] 获取图片
 * [X] 获取小说
 
+## 🌟
+
+[![Star History Chart](https://api.star-history.com/svg?repos=HIUEETR/esjzone-novel-downloader&type=Date)](https://star-history.com/#HIUEETR/esjzone-novel-downloader&Date)
+
 ## 📄 许可证
 
 MIT License
