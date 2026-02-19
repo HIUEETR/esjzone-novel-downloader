@@ -393,7 +393,8 @@ class EsjzoneDownloader:
                     chapter_pbar.refresh()
                 else:
                     if total > 0:
-                        image_pbar.total = total
+                        current_total = image_pbar.total or 0
+                        image_pbar.total = max(current_total, total)
                     image_pbar.n = completed
                     image_pbar.refresh()
         
@@ -457,6 +458,7 @@ class EsjzoneDownloader:
         if not img_tags:
             return str(soup)
 
+        tasks = []
         for img in img_tags:
             src = img.get("src")
             if not src:
@@ -488,11 +490,11 @@ class EsjzoneDownloader:
                 callback=self._process_image_task,
                 args=(src, filename, chapter, manager)
             )
-            manager.add_image_task(task)
+            tasks.append(task)
             
             # 替换 src
             img["src"] = f"images/{filename}"
-        
+        manager.add_image_tasks(tasks)
         return str(soup)
 
     def _process_image_task(self, url: str, filename: str, chapter: Chapter, manager: DownloadManager):

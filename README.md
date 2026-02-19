@@ -38,10 +38,7 @@
    start.bat
    ```
 
-   脚本会自动检测环境：
-
-   - 如果存在 `requirements.txt`，将使用 `pip` 安装依赖并运行。
-   - 如果不存在 `requirements.txt` (默认情况)，将自动使用 `uv` (现代化的 Python 包管理器) 来管理依赖并运行。如果未安装 `uv`，脚本会尝试自动安装。
+   脚本会自动检测环境自动使用 `uv` 来管理依赖并运行。如果未安装 `uv`，脚本会尝试自动安装。
 
 ### 手动运行 (如果不使用 start.bat)
 
@@ -61,7 +58,7 @@ uv run main.py
 由于项目默认使用 `pyproject.toml` 管理依赖，如果必须使用 pip，你需要手动安装依赖：
 
 ```bash
-pip install beautifulsoup4 colorama loguru pillow pyyaml questionary requests ruamel.yaml
+pip install beautifulsoup4 colorama loguru pillow pyyaml questionary requests ruamel.yaml 
 python main.py
 ```
 
