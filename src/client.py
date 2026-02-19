@@ -25,6 +25,7 @@ from .parser import parse_book, parse_chapter
 from .logger_config import logger
 from .config_loader import config
 from .cookie_manager import cookie_manager
+from .download_manager import DownloadManager, ChapterTask, ImageTask
 
 class EsjzoneDownloader:
     def __init__(
@@ -40,6 +41,7 @@ class EsjzoneDownloader:
         self.debug_dir = Path("debug_dump")
         # self.debug_dir.mkdir(parents=True, exist_ok=True) # 默认不创建
         self._lock = threading.Lock()
+        self._pbar_lock = threading.Lock() # 用于进度条更新的锁
 
         # 设置默认请求头
         self.session.headers.update({
@@ -107,84 +109,7 @@ class EsjzoneDownloader:
                 return response.content
         except Exception as e:
             logger.warning(f"下载图片失败: {url}, 错误: {e}")
-            return None
-
-    def process_images(self, html_content: str) -> Tuple[str, Dict[str, bytes]]:
-        """
-        处理 HTML 内容中的图片：
-        1. 解析 HTML
-        2. 找到所有 img 标签
-        3. 下载图片
-        4. 如果原图是 JPG，保留原格式；否则转换为 PNG 格式
-        5. 失败重试 2 次
-        6. 替换 src 为本地相对路径
-        7. 返回修改后的 HTML 和图片字典 {filename: content}
-        """
-        soup = BeautifulSoup(html_content, "html.parser")
-        images = {}
-        
-        img_tags = soup.find_all("img")
-        if not img_tags:
-            return str(soup), images
-
-        for img in tqdm(img_tags, desc="处理插图", leave=False):
-            src = img.get("src")
-            if not src:
-                continue
-            
-            # 跳过已经在本地引用的图片（如果有的话）
-            if src.startswith("images/"):
-                continue
-
-            # 处理相对路径
-            if not src.startswith("http"):
-                if src.startswith("/"):
-                    src = f"https://www.esjzone.one{src}"
-                else:
-                    logger.warning(f"跳过无法解析的图片链接: {src}")
-                    continue
-
-            # 重试逻辑
-            max_retries = 2
-            for attempt in range(max_retries + 1):
-                try:
-                    logger.debug(f"正在下载图片 (第 {attempt + 1} 次尝试): {src}")
-                    # 直接调用 download_image，它内部捕获了异常返回 None，这里需要判断
-                    img_data = self.download_image(src)
-                    
-                    if not img_data:
-                        raise Exception("下载失败，返回空数据")
-                    
-                    # 尝试识别和转换
-                    image_obj = Image.open(BytesIO(img_data))
-                    img_format = image_obj.format
-                    
-                    final_data = None
-                    filename = ""
-                    
-                    # 如果是 JPG，保留原样
-                    if img_format == "JPEG":
-                        final_data = img_data
-                        filename = f"{uuid.uuid4().hex}.jpg"
-                    else:
-                        # 其他格式转换为 PNG
-                        output_buffer = BytesIO()
-                        image_obj.save(output_buffer, format="PNG")
-                        final_data = output_buffer.getvalue()
-                        filename = f"{uuid.uuid4().hex}.png"
-                    
-                    images[filename] = final_data
-                    img["src"] = f"images/{filename}"
-                    break # 成功，跳出重试循环
-                    
-                except Exception as e:
-                    if attempt < max_retries:
-                        logger.warning(f"处理图片失败: {src}, 错误: {e}, 正在重试...")
-                        time.sleep(1) # 稍作等待
-                    else:
-                        logger.error(f"处理图片失败: {src}, 已达到最大重试次数，跳过。错误: {e}")
-        
-        return str(soup), images
+            raise e # 让 DownloadManager 处理重试
 
     def _dump_debug(self, response: Optional[requests.Response] = None, request: Optional[requests.PreparedRequest] = None, exception: Optional[Exception] = None):
         """
@@ -381,15 +306,20 @@ class EsjzoneDownloader:
         
         logger.info(f"书籍解析成功: {book.title} (共 {len(book.chapters)} 章)")
 
-        # 下载封面
+        # 下载封面 (仍然同步下载，因为它在正文前)
         cover_ext = ".png"
         if download_images and book.cover_url:
             max_retries = 2
             for attempt in range(max_retries + 1):
                 try:
                     logger.info(f"正在下载封面 ⌈ 第 {attempt + 1} 次尝试 ⌋: {book.cover_url}")
-                    img_data = self.download_image(book.cover_url)
-                    
+                    img_data = None
+                    try:
+                        with self.safe_request(book.cover_url, stream=True) as response:
+                             img_data = response.content
+                    except Exception:
+                        pass
+
                     if not img_data:
                         raise Exception("下载失败，返回空数据")
                     
@@ -448,52 +378,157 @@ class EsjzoneDownloader:
         
         book.chapters.insert(0, intro_chapter)
 
-        # 章节下载进度条
-        chapter_iter = book.chapters[1:] # 跳过介绍章节
+        # 启动异步下载管理器
+        manager = DownloadManager()
         
-        # 使用 tqdm 显示进度条
-        with tqdm(total=len(chapter_iter), desc="下载章节进度", unit="章") as pbar:
-            for i, chapter in enumerate(chapter_iter):
-                time.sleep(self.base_delay)
-                logger.debug(f"正在下载第 {i+1}/{len(chapter_iter)} 章: {chapter.title}")
+        # 初始化进度条
+        chapter_pbar = tqdm(total=len(book.chapters) - 1, desc="下载章节", unit="章") # -1 排除介绍章
+        image_pbar = tqdm(total=0, desc="下载图片", unit="张")
+        
+        def progress_callback(type, completed, total):
+            with self._pbar_lock:
+                if type == 'chapter':
+                    chapter_pbar.total = total
+                    chapter_pbar.n = completed
+                    chapter_pbar.refresh()
+                else:
+                    if total > 0:
+                        image_pbar.total = total
+                    image_pbar.n = completed
+                    image_pbar.refresh()
+        
+        def rate_callback(rate, threads):
+             with self._pbar_lock:
+                 chapter_pbar.set_postfix_str(f"速率: {rate}, 线程: {threads}")
+                 image_pbar.set_postfix_str(f"速率: {rate}, 线程: {threads}")
                 
-                # 章节下载重试逻辑
-                max_retries = 2
-                success = False
-                
-                for attempt in range(max_retries + 1):
-                    try:
-                        with self.safe_request(chapter.url) as ch_resp:
-                            ch_html = ch_resp.text
-                            title, content_html = parse_chapter(ch_html, chapter.url, chapter.title)
-                            
-                            if download_images:
-                                content_html, images = self.process_images(content_html)
-                                chapter.images = images
-                            
-                            chapter.title = title
-                            chapter.content_html = content_html
-                            chapter.content_text = _plain_text_from_html(content_html)
-                            success = True
-                            break # 成功，跳出重试循环
-                            
-                    except Exception as e:
-                        if attempt < max_retries:
-                            logger.warning(f"章节 '{chapter.title}' 下载失败 ⌈ 第 {attempt + 1} 次尝试 ⌋: {e}, 正在重试...")
-                            time.sleep(1) # 稍作等待
-                        else:
-                            logger.error(f"章节 '{chapter.title}' 下载失败: {e}, 已达到最大重试次数，跳过。")
-                
-                if not success:
-                    # 如果最终失败，可以考虑标记章节内容为“获取失败”
-                    chapter.content_html = f"<p><strong>[系统提示] 章节获取失败，请检查网络或稍后重试。</strong></p>"
-                    chapter.content_text = "[系统提示] 章节获取失败，请检查网络或稍后重试。"
-                
-                # 更新进度条
-                pbar.update(1)
-                pbar.set_postfix_str(f"当前: {chapter.title[:10]}..." if len(chapter.title) > 10 else chapter.title)
-
+        manager.on_progress = progress_callback
+        manager.on_rate_update = rate_callback
+        
+        # 提交章节任务 (跳过第0章介绍)
+        for ch in book.chapters[1:]:
+            task = ChapterTask(
+                url=ch.url,
+                chapter_obj=ch,
+                callback=self._process_chapter_task,
+                args=(ch, download_images, manager)
+            )
+            manager.add_chapter_task(task)
+            
+        manager.start()
+        
+        # 等待完成
+        try:
+            manager.wait_until_complete()
+        except KeyboardInterrupt:
+            logger.warning("用户中断下载，正在停止...")
+            manager.stop()
+            raise
+        finally:
+            manager.stop()
+            chapter_pbar.close()
+            image_pbar.close()
+        
+        logger.info(f"下载完成。成功: {manager.completed_chapters} 章, {manager.completed_images} 图。失败: {manager.failed_tasks}")
+        
         return book
+
+    def _process_chapter_task(self, chapter: Chapter, download_images: bool, manager: DownloadManager):
+        """章节下载任务处理函数"""
+        logger.debug(f"正在处理章节: {chapter.url}")
+        
+        with self.safe_request(chapter.url) as ch_resp:
+            manager.report_bytes(len(ch_resp.content))
+            ch_html = ch_resp.text
+            title, content_html = parse_chapter(ch_html, chapter.url, chapter.title)
+            
+            if download_images:
+                content_html = self._extract_and_queue_images(content_html, chapter, manager)
+            
+            chapter.title = title
+            chapter.content_html = content_html
+            chapter.content_text = _plain_text_from_html(content_html)
+
+    def _extract_and_queue_images(self, html_content: str, chapter: Chapter, manager: DownloadManager) -> str:
+        """解析图片并添加到下载队列"""
+        soup = BeautifulSoup(html_content, "html.parser")
+        img_tags = soup.find_all("img")
+        
+        if not img_tags:
+            return str(soup)
+
+        for img in img_tags:
+            src = img.get("src")
+            if not src:
+                continue
+            
+            if src.startswith("images/"):
+                continue
+
+            if not src.startswith("http"):
+                if src.startswith("/"):
+                    src = f"https://www.esjzone.one{src}"
+                else:
+                    logger.warning(f"跳过无法解析的图片链接: {src}")
+                    continue
+
+            # 生成唯一文件名
+            # 这里我们不确定图片格式，先假设为 png (转换后) 或者 jpg
+            # 实际上我们可以在下载后确定，但是我们需要现在就替换 src
+            # 为了简单，我们统一使用 uuid.png (下载时会处理格式)
+            # 或者我们可以保留扩展名如果 url 有的话
+            
+            filename = f"{uuid.uuid4().hex}.png" # 默认统一转为 png
+            
+            # 添加下载任务
+            task = ImageTask(
+                url=src,
+                chapter_obj=chapter,
+                image_filename=filename,
+                callback=self._process_image_task,
+                args=(src, filename, chapter, manager)
+            )
+            manager.add_image_task(task)
+            
+            # 替换 src
+            img["src"] = f"images/{filename}"
+        
+        return str(soup)
+
+    def _process_image_task(self, url: str, filename: str, chapter: Chapter, manager: DownloadManager):
+        """图片下载任务处理函数"""
+        logger.debug(f"正在下载图片: {url}")
+        
+        # 调用 download_image，如果失败会抛出异常，由 manager 捕获并重试
+        with self.safe_request(url, stream=True) as response:
+            img_data = response.content
+            manager.report_bytes(len(img_data))
+            
+        if not img_data:
+            raise Exception("下载图片返回空数据")
+
+        # 转换格式
+        try:
+            image_obj = Image.open(BytesIO(img_data))
+            final_data = None
+            
+            # 即使我们预设了 .png，如果原图是 jpg，我们可以尝试保存为 jpg 并修改 filename?
+            # 不，因为 HTML 里的 src 已经被替换为 .png 了。
+            # 所以这里必须强制转为 PNG，或者我们应该在替换 src 之前检查 URL 后缀?
+            # 为了兼容性，统一转 PNG 是最安全的。
+            
+            output_buffer = BytesIO()
+            image_obj.save(output_buffer, format="PNG")
+            final_data = output_buffer.getvalue()
+            
+            # 保存到章节对象 (线程安全吗？Python dict setitem 是原子的，但多线程并发写入不同 key 是安全的)
+            # Chapter 对象被多个线程共享吗？
+            # 一个章节只会被一个线程处理(ChapterTask)，但该章节的图片可能被多个线程并发处理(ImageTask)。
+            # chapter.images 是 dict。多线程并发写入不同 key 是安全的 (CPython GIL)。
+            chapter.images[filename] = final_data
+            
+        except Exception as e:
+            raise Exception(f"图片处理失败: {e}")
 
 
     def _sanitize_filename(self, filename: str) -> str:

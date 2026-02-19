@@ -66,7 +66,7 @@ def build_epub(book: Book, chapters: Iterable[Chapter], output_path: str | Path)
                 f'<item id="chap{ch.index}" href="chapter_{ch.index}.xhtml" '
                 f'media-type="application/xhtml+xml"/>'
             )
-            body_title = ch.title or f"Chapter {ch.index}"
+            body_title = ch.title or f"第 {ch.index} 章"
             body_content = ch.content_html or "<p></p>"
             chapter_xhtml = f"""<?xml version="1.0" encoding="utf-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml">

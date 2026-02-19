@@ -1,6 +1,8 @@
 import sys
 import os
+import argparse
 import questionary
+import time
 from src.client import EsjzoneDownloader
 from src.config_loader import config
 from src.logger_config import logger
@@ -232,7 +234,7 @@ def function_menu(downloader):
                 except Exception as e:
                     logger.error(f"下载失败: {e}")
                 
-                questionary.press_any_key_to_continue().ask()
+                questionary.press_any_key_to_continue(message="按任意键继续...").ask()
 
         elif choice == "返回上一级菜单":
             break
@@ -260,9 +262,30 @@ def main_menu(downloader, username=None):
         elif choice == "退出":
             sys.exit(0)
 
-def run_cli():
-    # 1. 初始化日志系统 
+def parse_cli_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description="ESJZone 小说下载器")
+    parser.add_argument("--max-threads", type=int, help="最大下载线程数")
+    parser.add_argument("--timeout", type=int, help="超时时间（秒）")
+    parser.add_argument("--retry-attempts", type=int, help="最大重试次数")
+    
+    # 使用 parse_known_args 避免与可能存在的其他参数冲突
+    # 但在这里我们通常只关心这些参数
+    args, unknown = parser.parse_known_args()
+    
+    if args.max_threads:
+        config.set('download.max_threads', args.max_threads)
+        logger.info(f"命令行覆盖：最大线程数设置为 {args.max_threads}")
+    if args.timeout:
+        config.set('download.timeout_seconds', args.timeout)
+        logger.info(f"命令行覆盖：超时时间设置为 {args.timeout}")
+    if args.retry_attempts:
+        config.set('download.retry_attempts', args.retry_attempts)
+        logger.info(f"命令行覆盖：最大重试次数设置为 {args.retry_attempts}")
 
+def run_cli():
+    # 0. 解析命令行参数
+    parse_cli_args()
     
     # 2. 初始化下载器
     downloader = EsjzoneDownloader()
@@ -292,8 +315,7 @@ def run_cli():
             logger.info("未配置账号密码或配置不全，跳过登录")
             
     # 4. 进入主菜单
-    # 为了让用户能看到启动时的登录日志，稍微停顿一下
-    import time
+    # 为了能看到启动时的登录日志，稍微停顿一下
     time.sleep(1.5)
     
     main_menu(downloader, username)

@@ -25,10 +25,10 @@ def parse_book(html: str, url: str) -> Book:
 
     title_node = soup.select_one(".book-detail h2")
     if title_node is None:
-        raise ValueError("cannot locate book title from .book-detail h2")
+        raise ValueError("无法从 .book-detail h2 获取书籍标题")
     title = _get_text_or_empty(title_node)
 
-    author = "Unknown Author"
+    author = "未知作者"
     for li in soup.select("ul.book-detail li"):
         if li.text and "作者:" in li.text:
             a = li.find("a")
