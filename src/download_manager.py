@@ -75,11 +75,11 @@ class DownloadManager:
                 self.on_progress('chapter', self.completed_chapters, self.total_chapters)
 
     def add_image_task(self, task: ImageTask):
-        self.image_queue.put(task)
         with self.lock:
             self.total_images += 1
             if self.on_progress:
                 self.on_progress('image', self.completed_images, self.total_images)
+        self.image_queue.put(task)
     
     def start(self):
         logger.info(f"正在启动下载管理器，使用 {self.max_threads} 个线程")

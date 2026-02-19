@@ -76,6 +76,9 @@ def edit_download_menu():
             f"修改下载格式 ⌈ 当前: {dl_config.get('download_format', 'epub')} ⌋",
             f"修改命名模式 ⌈ 当前: {dl_config.get('naming_mode', 'book_name')} ⌋",
             f"修改是否创建子目录 ⌈ 当前: {dl_config.get('use_book_dir', False)} ⌋",
+            f"修改最大线程数 ⌈ 当前: {dl_config.get('max_threads', 5)} ⌋",
+            f"修改超时时间 ⌈ 当前: {dl_config.get('timeout_seconds', 180)} 秒 ⌋",
+            f"修改最大重试次数 ⌈ 当前: {dl_config.get('retry_attempts', 3)} ⌋",
             "返回上一级菜单"
         ]
         
@@ -117,6 +120,21 @@ def edit_download_menu():
             ).ask()
             config.set('download.use_book_dir', val)
             config.save()
+        elif choice.startswith("修改最大线程数"):
+            val = questionary.text("请输入最大线程数：", default=str(dl_config.get('max_threads', 5))).ask()
+            if val and val.isdigit():
+                config.set('download.max_threads', int(val))
+                config.save()
+        elif choice.startswith("修改超时时间"):
+            val = questionary.text("请输入超时时间（秒）：", default=str(dl_config.get('timeout_seconds', 180))).ask()
+            if val and val.isdigit():
+                config.set('download.timeout_seconds', int(val))
+                config.save()
+        elif choice.startswith("修改最大重试次数"):
+            val = questionary.text("请输入最大重试次数：", default=str(dl_config.get('retry_attempts', 3))).ask()
+            if val and val.isdigit():
+                config.set('download.retry_attempts', int(val))
+                config.save()
         elif choice == "返回上一级菜单":
             break
 
