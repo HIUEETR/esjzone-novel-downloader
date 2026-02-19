@@ -28,7 +28,7 @@
 1. **下载项目代码**
 
    ```bash
-   git clone <repository-url>
+   git clone git@github.com:HIUEETR/esjzone-novel-downloader.git
    cd esjzone-novel-downloader
    ```
 2. **运行启动脚本**
