@@ -5,6 +5,8 @@ import zipfile
 import datetime as _dt
 from pathlib import Path
 from typing import Iterable
+from io import BytesIO
+from PIL import Image
 
 from .model import Book, Chapter
 
@@ -83,10 +85,22 @@ def build_epub(book: Book, chapters: Iterable[Chapter], output_path: str | Path)
         # 写入图片资源
         cover_id = None
         if book.cover_image:
-            zf.writestr("OEBPS/images/cover.png", book.cover_image)
+            # 检测封面图片格式
+            cover_ext = ".png"
+            cover_mime = "image/png"
+            try:
+                # 使用 with 确保文件句柄关闭
+                with Image.open(BytesIO(book.cover_image)) as img:
+                    if img.format == "JPEG":
+                        cover_ext = ".jpg"
+                        cover_mime = "image/jpeg"
+            except Exception:
+                pass # 默认使用 png
+
+            zf.writestr(f"OEBPS/images/cover{cover_ext}", book.cover_image)
             cover_id = "cover_img"
             manifest_items.append(
-                f'<item id="{cover_id}" href="images/cover.png" media-type="image/png" properties="cover-image"/>'
+                f'<item id="{cover_id}" href="images/cover{cover_ext}" media-type="{cover_mime}" properties="cover-image"/>'
             )
 
         for filename, (content, mimetype) in all_images.items():

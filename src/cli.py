@@ -4,9 +4,33 @@ import questionary
 from src.client import EsjzoneDownloader
 from src.config_loader import config
 from src.logger_config import logger
+from src.cookie_manager import cookie_manager
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
+
+def _try_login():
+    """尝试使用当前配置的账号密码登录"""
+    username = config.account.get('username')
+    password = config.account.get('password')
+    
+    if username and password:
+        logger.info("检测到账号密码，正在尝试登录...")
+        # 登录前先清理旧 Cookie，避免干扰
+        cookie_manager.delete_cookies()
+        
+        # 实例化下载器并尝试登录
+        try:
+            downloader = EsjzoneDownloader()
+            if downloader.login():
+                logger.info("登录成功！")
+            else:
+                logger.warning("登录失败，请检查账号密码。")
+        except Exception as e:
+            logger.error(f"登录过程发生错误: {e}")
+        
+        # 暂停以便用户查看结果
+        input("\n按回车键继续...")
 
 def edit_account_menu():
     while True:
@@ -31,11 +55,13 @@ def edit_account_menu():
             if new_username is not None:
                 config.set('account.username', new_username)
                 config.save()
+                _try_login()
         elif choice == "修改密码":
             new_password = questionary.password("请输入密码：", default=current_password).ask()
             if new_password is not None:
                 config.set('account.password', new_password)
                 config.save()
+                _try_login()
         elif choice == "返回上一级菜单":
             break
 

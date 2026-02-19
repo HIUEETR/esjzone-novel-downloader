@@ -62,7 +62,7 @@ class CookieManager:
         # 这里为了稳健，检查关键特征字符串
         if "window.location.href='/my/login';" in html:
             logger.warning("Cookie 已失效，已清理并准备重新登录")
-            self._delete_cookies()
+            self.delete_cookies()
             return None
 
         # 2. 尝试提取用户名 (Cookie 有效特征)
@@ -100,7 +100,7 @@ class CookieManager:
         except Exception as e:
             logger.error(f"保存 Cookie 失败: {e}")
 
-    def _delete_cookies(self):
+    def delete_cookies(self):
         """删除失效的 Cookie 文件"""
         try:
             if self.cookie_path.exists():

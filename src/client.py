@@ -114,9 +114,10 @@ class EsjzoneDownloader:
         1. 解析 HTML
         2. 找到所有 img 标签
         3. 下载图片
-        4. 将图片转换为 PNG 格式
-        5. 替换 src 为本地相对路径
-        6. 返回修改后的 HTML 和图片字典 {filename: content}
+        4. 如果原图是 JPG，保留原格式；否则转换为 PNG 格式
+        5. 失败重试 2 次
+        6. 替换 src 为本地相对路径
+        7. 返回修改后的 HTML 和图片字典 {filename: content}
         """
         soup = BeautifulSoup(html_content, "html.parser")
         images = {}
@@ -138,23 +139,45 @@ class EsjzoneDownloader:
                     logger.warning(f"跳过无法解析的图片链接: {src}")
                     continue
 
-            logger.info(f"正在下载图片: {src}")
-            img_data = self.download_image(src)
-            
-            if img_data:
+            # 重试逻辑
+            max_retries = 2
+            for attempt in range(max_retries + 1):
                 try:
-                    # 转换为 PNG
-                    image_obj = Image.open(BytesIO(img_data))
-                    output_buffer = BytesIO()
-                    image_obj.save(output_buffer, format="PNG")
-                    png_data = output_buffer.getvalue()
+                    logger.info(f"正在下载图片 (第 {attempt + 1} 次尝试): {src}")
+                    # 直接调用 download_image，它内部捕获了异常返回 None，这里需要判断
+                    img_data = self.download_image(src)
                     
-                    filename = f"{uuid.uuid4().hex}.png"
-                    images[filename] = png_data
+                    if not img_data:
+                        raise Exception("下载失败，返回空数据")
+                    
+                    # 尝试识别和转换
+                    image_obj = Image.open(BytesIO(img_data))
+                    img_format = image_obj.format
+                    
+                    final_data = None
+                    filename = ""
+                    
+                    # 如果是 JPG，保留原样
+                    if img_format == "JPEG":
+                        final_data = img_data
+                        filename = f"{uuid.uuid4().hex}.jpg"
+                    else:
+                        # 其他格式转换为 PNG
+                        output_buffer = BytesIO()
+                        image_obj.save(output_buffer, format="PNG")
+                        final_data = output_buffer.getvalue()
+                        filename = f"{uuid.uuid4().hex}.png"
+                    
+                    images[filename] = final_data
                     img["src"] = f"images/{filename}"
+                    break # 成功，跳出重试循环
+                    
                 except Exception as e:
-                    logger.warning(f"图片转换失败: {src}, 错误: {e}")
-                    pass
+                    if attempt < max_retries:
+                        logger.warning(f"处理图片失败: {src}, 错误: {e}, 正在重试...")
+                        time.sleep(1) # 稍作等待
+                    else:
+                        logger.error(f"处理图片失败: {src}, 已达到最大重试次数，跳过。错误: {e}")
         
         return str(soup), images
 
@@ -354,25 +377,42 @@ class EsjzoneDownloader:
         logger.info(f"书籍解析成功: {book.title} (共 {len(book.chapters)} 章)")
 
         # 下载封面
+        cover_ext = ".png"
         if download_images and book.cover_url:
-            logger.info(f"正在下载封面: {book.cover_url}")
-            try:
-                book.cover_image = self.download_image(book.cover_url)
-                if book.cover_image:
-                     try:
-                        image_obj = Image.open(BytesIO(book.cover_image))
+            max_retries = 2
+            for attempt in range(max_retries + 1):
+                try:
+                    logger.info(f"正在下载封面 (第 {attempt + 1} 次尝试): {book.cover_url}")
+                    img_data = self.download_image(book.cover_url)
+                    
+                    if not img_data:
+                        raise Exception("下载失败，返回空数据")
+                    
+                    # 尝试识别
+                    image_obj = Image.open(BytesIO(img_data))
+                    if image_obj.format == "JPEG":
+                        book.cover_image = img_data
+                        cover_ext = ".jpg"
+                    else:
+                        # 转换为 PNG
                         output_buffer = BytesIO()
                         image_obj.save(output_buffer, format="PNG")
                         book.cover_image = output_buffer.getvalue()
-                     except Exception as e:
-                        logger.warning(f"封面转换 PNG 失败: {e}")
-            except Exception as e:
-                logger.error(f"封面下载失败: {e}")
+                        cover_ext = ".png"
+                    break # 成功
+                    
+                except Exception as e:
+                    if attempt < max_retries:
+                        logger.warning(f"封面下载失败: {e}, 正在重试...")
+                        time.sleep(1)
+                    else:
+                        logger.error(f"封面下载失败: {e}, 已跳过")
+                        book.cover_image = None
 
         # 将书籍信息构造为“第0章”
         intro_content = []
         if book.cover_image:
-            intro_content.append(f'<div style="text-align: center;"><img src="images/cover.png" alt="封面"/></div>')
+            intro_content.append(f'<div style="text-align: center;"><img src="images/cover{cover_ext}" alt="封面"/></div>')
         
         intro_content.append(f"<h1>{book.title}</h1>")
         intro_content.append(f"<p><strong>作者:</strong> {book.author}</p>")
