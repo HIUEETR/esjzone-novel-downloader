@@ -1,0 +1,12 @@
+.pytest_cache
+__pycache__
+.venv/
+web/
+*.yaml
+data/
+books/
+logs/
+test/
+debug/
+downloads/
+web/
