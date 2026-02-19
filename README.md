@@ -105,6 +105,23 @@ python main.py
 
 [![Star History Chart](https://api.star-history.com/svg?repos=HIUEETR/esjzone-novel-downloader&type=Date)](https://star-history.com/#HIUEETR/esjzone-novel-downloader&Date)
 
+## 🙏 致谢
+
+<p align="center">
+  <a href="https://github.com/404-novel-project/novel-downloader">
+    <img src="https://github.com/404-novel-project.png" width="70px;" />
+  </a>
+  <a href="https://github.com/readest/readest">
+    <img src="https://github.com/readest.png" width="70px;" />
+  </a>
+</p>
+
+<p align="center">
+  本项目的设计与实现受到  
+  <b>novel-downloader</b> 的启发，  
+  并推荐使用 <b>readest</b> 进行阅读。
+</p>
+
 ## 📄 许可证
 
 MIT License
