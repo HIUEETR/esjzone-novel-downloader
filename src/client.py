@@ -15,8 +15,9 @@ from http.cookiejar import CookieJar
 import requests
 from requests.exceptions import RequestException
 from bs4 import BeautifulSoup
-from PIL import Image
 from io import BytesIO
+from PIL import Image
+from tqdm import tqdm
 
 from .epub import build_epub
 from .model import Book, Chapter
@@ -443,27 +444,50 @@ class EsjzoneDownloader:
         
         book.chapters.insert(0, intro_chapter)
 
-        for i, chapter in enumerate(book.chapters):
-            if i == 0: continue 
-            
-            time.sleep(self.base_delay)
-            logger.debug(f"正在下载第 {i}/{len(book.chapters)-1} 章: {chapter.title}")
-            
-            try:
-                with self.safe_request(chapter.url) as ch_resp:
-                    ch_html = ch_resp.text
-                    title, content_html = parse_chapter(ch_html, chapter.url, chapter.title)
-                    
-                    if download_images:
-                        content_html, images = self.process_images(content_html)
-                        chapter.images = images
-                    
-                    chapter.title = title
-                    chapter.content_html = content_html
-                    chapter.content_text = _plain_text_from_html(content_html)
-            except Exception as e:
-                logger.error(f"章节 {chapter.title} 下载失败: {e}")
-                continue
+        # 章节下载进度条
+        chapter_iter = book.chapters[1:] # 跳过介绍章节
+        
+        # 使用 tqdm 显示进度条
+        with tqdm(total=len(chapter_iter), desc="下载章节进度", unit="章") as pbar:
+            for i, chapter in enumerate(chapter_iter):
+                time.sleep(self.base_delay)
+                logger.debug(f"正在下载第 {i+1}/{len(chapter_iter)} 章: {chapter.title}")
+                
+                # 章节下载重试逻辑
+                max_retries = 2
+                success = False
+                
+                for attempt in range(max_retries + 1):
+                    try:
+                        with self.safe_request(chapter.url) as ch_resp:
+                            ch_html = ch_resp.text
+                            title, content_html = parse_chapter(ch_html, chapter.url, chapter.title)
+                            
+                            if download_images:
+                                content_html, images = self.process_images(content_html)
+                                chapter.images = images
+                            
+                            chapter.title = title
+                            chapter.content_html = content_html
+                            chapter.content_text = _plain_text_from_html(content_html)
+                            success = True
+                            break # 成功，跳出重试循环
+                            
+                    except Exception as e:
+                        if attempt < max_retries:
+                            logger.warning(f"章节 '{chapter.title}' 下载失败 (第 {attempt + 1} 次尝试): {e}, 正在重试...")
+                            time.sleep(1) # 稍作等待
+                        else:
+                            logger.error(f"章节 '{chapter.title}' 下载失败: {e}, 已达到最大重试次数，跳过。")
+                
+                if not success:
+                    # 如果最终失败，可以考虑标记章节内容为“获取失败”
+                    chapter.content_html = f"<p><strong>[系统提示] 章节获取失败，请检查网络或稍后重试。</strong></p>"
+                    chapter.content_text = "[系统提示] 章节获取失败，请检查网络或稍后重试。"
+                
+                # 更新进度条
+                pbar.update(1)
+                pbar.set_postfix_str(f"当前: {chapter.title[:10]}..." if len(chapter.title) > 10 else chapter.title)
 
         return book
 
