@@ -328,7 +328,7 @@ class MonitorManager:
             "请选择下载模式：",
             choices=[
                 "下载整本小说",
-                f"下载更新章节 ({latest_chap} -> {update_chap})",
+                f"下载更新章节 ⌈ {latest_chap} -> {update_chap} ⌋",
                 "跳过"
             ],
             instruction="⌈ 使用↑↓选择 ⌋"
@@ -421,12 +421,13 @@ class MonitorManager:
             TextColumn("{task.fields[info]}"),
         )
         
-        chapter_task_id = progress.add_task("下载章节", total=len(target_chapters), info="")
+        chapter_total = len(target_chapters)
+        chapter_task_id = progress.add_task("下载章节", total=chapter_total, info="")
         image_task_id = progress.add_task("下载图片", total=0, info="")
         
         def progress_callback(type, completed, total):
             if type == 'chapter':
-                progress.update(chapter_task_id, completed=completed, total=total)
+                progress.update(chapter_task_id, completed=completed, total=chapter_total)
             else:
                 progress.update(image_task_id, completed=completed, total=total if total > 0 else None)
         
