@@ -15,4 +15,5 @@ dependencies = [
     "rich>=14.3.2",
     "ruamel.yaml>=0.17.0",
     "tqdm>=4.67.3",
+    "wcwidth>=0.6.0",
 ]

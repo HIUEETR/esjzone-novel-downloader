@@ -89,33 +89,35 @@ class FavoritesManager:
             novels_p1, total_pages = self.downloader.get_favorites(1, sort_by)
             results = {1: novels_p1}
             
-            if total_pages > 1:
-                pages_to_fetch = list(range(2, total_pages + 1))
+            # 无论是否有下一页，都显示进度条以提供反馈
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                BarColumn(),
+                MofNCompleteColumn(),
+                TaskProgressColumn(),
+                transient=True 
+            ) as progress:
+                # 任务总数设置为 total_pages，初始完成 1 (第一页已完成)
+                task_id = progress.add_task(f"更新收藏列表 (共 {total_pages} 页)...", total=total_pages, completed=1)
                 
-                with Progress(
-                    SpinnerColumn(),
-                    TextColumn("[progress.description]{task.description}"),
-                    BarColumn(),
-                    MofNCompleteColumn(),
-                    TaskProgressColumn(),
-                    transient=True 
-                ) as progress:
-                    task_id = progress.add_task(f"更新收藏列表 (共 {total_pages} 页)...", total=len(pages_to_fetch))
+                if total_pages > 1:
+                    pages_to_fetch = list(range(2, total_pages + 1))
                     
                     with ThreadPoolExecutor(max_workers=5) as executor:
                         future_to_page = {
-                            executor.submit(self._fetch_page, p, sort_by): p 
+                            executor.submit(self.downloader.get_favorites, p, sort_by): p 
                             for p in pages_to_fetch
                         }
                         
                         for future in as_completed(future_to_page):
                             page = future_to_page[future]
                             try:
+                                # 注意：future.result() 返回的是 (novels, total_pages) 元组
                                 novels, _ = future.result()
                                 results[page] = novels
                             except Exception as e:
-                                logger.error(f"获取第 {page} 页失败: {e}")
-                                results[page] = [] # 保持空列表占位
+                                results[page] = [] 
                             finally:
                                 progress.advance(task_id)
             

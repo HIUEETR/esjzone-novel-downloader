@@ -3,6 +3,7 @@ import os
 import argparse
 import questionary
 import time
+import wcwidth
 from src.client import EsjzoneDownloader
 from src.config_loader import config
 from src.logger_config import logger
@@ -11,6 +12,39 @@ from src.favorites_manager import FavoritesManager
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
+
+def truncate_and_pad(text: str, target_width: int) -> str:
+    """
+    将字符串截断或填充至指定的显示宽度。
+    """
+    if not text:
+        text = ""
+        
+    text_width = wcwidth.wcswidth(text)
+    
+    if text_width <= target_width:
+        return text + " " * (target_width - text_width)
+    
+    # 需要截断
+    current_width = 0
+    result = ""
+    ellipsis = "…"
+    ellipsis_width = wcwidth.wcwidth(ellipsis)
+    if ellipsis_width < 0: ellipsis_width = 1
+    
+    for char in text:
+        char_width = wcwidth.wcwidth(char)
+        if char_width < 0: char_width = 0
+        
+        if current_width + char_width + ellipsis_width > target_width:
+            break
+        result += char
+        current_width += char_width
+        
+    result += ellipsis
+    
+    # 填充剩余空格
+    return result + " " * (target_width - current_width - ellipsis_width)
 
 def _try_login():
     """尝试使用当前配置的账号密码登录"""
@@ -280,10 +314,18 @@ def favorite_menu(downloader, favorites_manager):
         # 添加导航提示信息
         choices.append(questionary.Separator(f"--- 第 {page} / {total_pages} 页 ⌈ 共 {total_novels} 本 ⌋ ---"))
         
-        # 简单的对齐格式化
-        # 注意：由于中文字符宽度问题，纯文本对齐可能不完美，这里做简单截断处理
-        # 增加列之间的间隔，使界面更宽敞
-        header = f"{'序号':>4}   {'标题':<13}   |   {'最新章节':<13}   |   {'更新时间'}"
+        # 使用 wcwidth 计算显示宽度并对齐
+        # 标题宽度设为 24 (约12个汉字)，最新章节设为 24，更新时间保持原样
+        title_width = 24
+        latest_width = 24
+        
+        # 构造表头
+        header_title = truncate_and_pad("标题", title_width)
+        header_latest = truncate_and_pad("最新章节", latest_width)
+        
+        # 注意：Separator 没有选择指针，所以可能会比下面的选项向左偏。
+        # 为了视觉对齐，可以在前面加两个空格模拟指针占位（视具体终端和 questionary 版本而定）
+        header = f"{'序号':>4}   {header_title}      {header_latest}      {'更新时间'}"
         choices.append(questionary.Separator(header))
 
         for idx, novel in enumerate(current_novels):
@@ -292,18 +334,11 @@ def favorite_menu(downloader, favorites_manager):
             latest = novel['latest_chapter']
             update = novel['update_time']
             
-            # 截断过长的标题和章节名 (限制10个字)
-            display_title = title
-            if len(display_title) > 10:
-                display_title = display_title[:9] + "…"
-            
-            display_latest = latest
-            if len(display_latest) > 10:
-                display_latest = display_latest[:9] + "…"
+            display_title = truncate_and_pad(title, title_width)
+            display_latest = truncate_and_pad(latest, latest_width)
 
             # 格式: 序号. 标题 | 最新: ... | 更新: ...
-            # 增加列之间的间隔
-            label = f"{abs_idx:>4}. {display_title:<10}   |   {display_latest:<10}   |   {update}"
+            label = f"{abs_idx:>4}. {display_title}   |   {display_latest}   |   {update}"
             choices.append(questionary.Choice(label, value=novel))
             
         choices.append(questionary.Separator("--- 操作 ---"))

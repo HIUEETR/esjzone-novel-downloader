@@ -89,6 +89,7 @@ dependencies = [
     { name = "rich" },
     { name = "ruamel-yaml" },
     { name = "tqdm" },
+    { name = "wcwidth" },
 ]
 
 [package.metadata]
@@ -103,6 +104,7 @@ requires-dist = [
     { name = "rich", specifier = ">=14.3.2" },
     { name = "ruamel-yaml", specifier = ">=0.17.0" },
     { name = "tqdm", specifier = ">=4.67.3" },
+    { name = "wcwidth", specifier = ">=0.6.0" },
 ]
 
 [[package]]
