@@ -17,7 +17,7 @@ from requests.exceptions import RequestException
 from bs4 import BeautifulSoup
 from io import BytesIO
 from PIL import Image
-from tqdm.rich import tqdm
+from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn, SpinnerColumn
 
 from .epub import build_epub
 from .model import Book, Chapter
@@ -381,54 +381,53 @@ class EsjzoneDownloader:
         # 启动异步下载管理器
         manager = DownloadManager()
         
-        # 初始化进度条
-        chapter_pbar = tqdm(total=len(book.chapters) - 1, desc="下载章节", unit="章") # -1 排除介绍章
-        image_pbar = tqdm(total=0, desc="下载图片", unit="张")
+        # 初始化进度条 (Rich)
+        progress = Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TimeRemainingColumn(),
+            SpinnerColumn(),
+            TextColumn("{task.fields[info]}"),
+        )
+        
+        chapter_task_id = progress.add_task("下载章节", total=len(book.chapters) - 1, info="")
+        image_task_id = progress.add_task("下载图片", total=0, info="")
         
         def progress_callback(type, completed, total):
-            with self._pbar_lock:
-                if type == 'chapter':
-                    chapter_pbar.total = total
-                    chapter_pbar.n = completed
-                    chapter_pbar.refresh()
-                else:
-                    if total > 0:
-                        current_total = image_pbar.total or 0
-                        image_pbar.total = max(current_total, total)
-                    image_pbar.n = completed
-                    image_pbar.refresh()
+            if type == 'chapter':
+                progress.update(chapter_task_id, completed=completed, total=total)
+            else:
+                progress.update(image_task_id, completed=completed, total=total if total > 0 else None)
         
         def rate_callback(rate, threads):
-             with self._pbar_lock:
-                 chapter_pbar.set_postfix_str(f"速率: {rate}, 线程: {threads}")
-                 image_pbar.set_postfix_str(f"速率: {rate}, 线程: {threads}")
-                
+            info_str = f"速率: {rate}, 线程: {threads}"
+            progress.update(chapter_task_id, info=info_str)
+            progress.update(image_task_id, info=info_str)
+            
         manager.on_progress = progress_callback
         manager.on_rate_update = rate_callback
         
-        # 提交章节任务 (跳过第0章介绍)
-        for ch in book.chapters[1:]:
-            task = ChapterTask(
-                url=ch.url,
-                chapter_obj=ch,
-                callback=self._process_chapter_task,
-                args=(ch, download_images, manager)
-            )
-            manager.add_chapter_task(task)
-            
-        manager.start()
-        
-        # 等待完成
         try:
-            manager.wait_until_complete()
+            with progress:
+                # 提交章节任务 (跳过第0章介绍)
+                for ch in book.chapters[1:]:
+                    task = ChapterTask(
+                        url=ch.url,
+                        chapter_obj=ch,
+                        callback=self._process_chapter_task,
+                        args=(ch, download_images, manager)
+                    )
+                    manager.add_chapter_task(task)
+                    
+                manager.start()
+                manager.wait_until_complete()
         except KeyboardInterrupt:
             logger.warning("用户中断下载，正在停止...")
             manager.stop()
             raise
         finally:
             manager.stop()
-            chapter_pbar.close()
-            image_pbar.close()
         
         logger.info(f"下载完成。成功: {manager.completed_chapters} 章, {manager.completed_images} 图。失败: {manager.failed_tasks}")
         
