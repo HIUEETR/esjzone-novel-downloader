@@ -40,7 +40,6 @@ def parse_book(html: str, url: str) -> Book:
 
     intro_dom = soup.select_one(".description")
     if intro_dom is None:
-        # 尝试其他可能的简介容器
         intro_dom = soup.select_one(".book-description")
     introduction = intro_dom.get_text("\n", strip=True) if intro_dom else ""
 
@@ -55,7 +54,6 @@ def parse_book(html: str, url: str) -> Book:
     for li in soup.select("ul.book-detail li"):
         text = li.get_text(strip=True)
         if "最近更新" in text or "最后更新" in text or "最後更新" in text:
-            # Format usually like "最近更新: 2024-01-01"
             parts = text.split(":", 1)
             if len(parts) > 1:
                 update_time = parts[1].strip()
@@ -63,7 +61,6 @@ def parse_book(html: str, url: str) -> Book:
 
     tags = [a.get_text(strip=True) for a in soup.select("section.widget-tags.m-t-20 a.tag")]
     if not tags:
-        # 尝试更宽泛的选择器
         tags = [a.get_text(strip=True) for a in soup.select(".widget-tags a.tag")]
 
     book = Book(
@@ -145,8 +142,6 @@ def parse_favorites(html: str) -> Tuple[List[Dict[str, str]], int]:
     soup = BeautifulSoup(html, "html.parser")
     novels = []
     
-    # 解析小说列表
-    # 结构通常在表格内
     for tr in soup.select("tr"):
         item = tr.select_one(".product-item")
         if not item:
@@ -164,7 +159,6 @@ def parse_favorites(html: str) -> Tuple[List[Dict[str, str]], int]:
         latest_chapter_elem = item.select_one(".book-ep .mr-3 a")
         latest_chapter = latest_chapter_elem.get_text(strip=True) if latest_chapter_elem else ""
         
-        # 最后观看记录位于 .book-ep 的第二个 div 中
         book_ep_divs = item.select(".book-ep > div")
         last_viewed = ""
         if len(book_ep_divs) > 1:
@@ -181,7 +175,6 @@ def parse_favorites(html: str) -> Tuple[List[Dict[str, str]], int]:
             "update_time": update_time
         })
         
-    # 解析总页数
     total_pages = 1
     script_content = ""
     for script in soup.find_all("script"):
@@ -218,8 +211,6 @@ def parse_novel_status(html: str, url: str) -> Dict[str, str]:
     latest_chapter = ""
     chapter_container = soup.select_one("#chapterList")
     if chapter_container:
-        # 查找所有链接，取最后一个
-        # 这里的链接可能嵌套在 details 中，find_all 会递归查找
         all_links = chapter_container.find_all("a")
         if all_links:
             last_link = all_links[-1]

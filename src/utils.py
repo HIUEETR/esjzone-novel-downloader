@@ -16,7 +16,6 @@ def truncate_and_pad(text: str, target_width: int) -> str:
     if text_width <= target_width:
         return text + " " * (target_width - text_width)
     
-    # 需要截断
     current_width = 0
     result = ""
     ellipsis = "…"
@@ -34,5 +33,4 @@ def truncate_and_pad(text: str, target_width: int) -> str:
         
     result += ellipsis
     
-    # 填充剩余空格
     return result + " " * (target_width - current_width - ellipsis_width)

@@ -30,9 +30,7 @@ class CookieManager:
                 return []
             
             if not isinstance(cookies, list):
-                # 如果是 pkl 加载出来的 dict，或者是 dict 格式，尝试转换为 list
                 if isinstance(cookies, dict):
-                     # 简单的 dict -> list 转换
                      cookies = [{'name': k, 'value': v} for k, v in cookies.items()]
                 else:
                     logger.warning(f"Cookie 数据格式异常: {type(cookies)}")
@@ -74,7 +72,6 @@ class CookieManager:
             logger.info(f"Cookie 校验通过，用户名：{username}")
             return username
         
-        # 既不是明确失效，也不是明确成功 (可能是其他页面或结构变更)
         logger.warning("未检测到登录状态，可能 Cookie 已失效或页面结构变更")
         return None
 

@@ -31,7 +31,6 @@ def _try_login():
         except Exception as e:
             logger.error(f"登录过程发生错误: {e}")
         
-        # 暂停以便用户查看结果
         input("\n按回车键继续...")
 
 def edit_account_menu():
@@ -228,7 +227,6 @@ def edit_config_menu():
             break
 
 def favorite_menu(downloader, favorites_manager):
-    # 询问排序方式
     sort_choices = [
         questionary.Choice("按最近更新", value="new"),
         questionary.Choice("按最近收藏", value="favor"),
@@ -276,20 +274,14 @@ def favorite_menu(downloader, favorites_manager):
 
         choices = []
         
-        # 添加导航提示信息
         choices.append(questionary.Separator(f"--- 第 {page} / {total_pages} 页 ⌈ 共 {total_novels} 本 ⌋ ---"))
         
-        # 使用 wcwidth 计算显示宽度并对齐
-        # 标题宽度设为 24 (约12个汉字)，最新章节设为 24，更新时间保持原样
         title_width = 24
         latest_width = 24
         
-        # 构造表头
         header_title = truncate_and_pad("标题", title_width)
         header_latest = truncate_and_pad("最新章节", latest_width)
         
-        # 注意：Separator 没有选择指针，所以可能会比下面的选项向左偏。
-        # 为了视觉对齐，可以在前面加两个空格模拟指针占位（视具体终端和 questionary 版本而定）
         header = f"{'序号':>4}   {header_title}      {header_latest}      {'更新时间'}"
         choices.append(questionary.Separator(header))
 
@@ -302,7 +294,6 @@ def favorite_menu(downloader, favorites_manager):
             display_title = truncate_and_pad(title, title_width)
             display_latest = truncate_and_pad(latest, latest_width)
 
-            # 格式: 序号. 标题 | 最新: ... | 更新: ...
             label = f"{abs_idx:>4}. {display_title}   |   {display_latest}   |   {update}"
             choices.append(questionary.Choice(label, value=novel))
             
@@ -341,7 +332,6 @@ def favorite_menu(downloader, favorites_manager):
                     print(f"页码无效，请输入 1 到 {total_pages} 之间的数字")
                     time.sleep(1)
         elif isinstance(selection, dict):
-            # 选中了一本小说
             novel_url = selection['url']
             novel_title = selection['title']
             print(f"\n准备下载: {novel_title}")
@@ -443,8 +433,6 @@ def parse_cli_args():
     parser.add_argument("--timeout", type=int, help="超时时间（秒）")
     parser.add_argument("--retry-attempts", type=int, help="最大重试次数")
     
-    # 使用 parse_known_args 避免与可能存在的其他参数冲突
-    # 但在这里我们通常只关心这些参数
     args, unknown = parser.parse_known_args()
     
     if args.max_threads:

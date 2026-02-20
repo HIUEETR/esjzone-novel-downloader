@@ -4,7 +4,6 @@ from src.config_loader import config
 import sys
 
 def main():
-    # 1. 初始化日志系统
     try:
         setup_logger(
             log_level=config.log.get('level', 'INFO'), 
@@ -17,7 +16,6 @@ def main():
 
     logger.info("--- 程序启动 ---")
     
-    # 运行 CLI
     try:
         run_cli()
     except KeyboardInterrupt:

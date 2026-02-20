@@ -39,9 +39,8 @@ class EsjzoneDownloader:
         
         # 初始化调试目录
         self.debug_dir = Path("debug")
-        # self.debug_dir.mkdir(parents=True, exist_ok=True) # 默认不创建
         self._lock = threading.Lock()
-        self._pbar_lock = threading.Lock() # 用于进度条更新的锁
+        self._pbar_lock = threading.Lock()
 
         # 设置默认请求头
         self.session.headers.update({
@@ -80,8 +79,6 @@ class EsjzoneDownloader:
         """加载指定 Cookie 到会话中"""
         try:
             if isinstance(cookies, (str, Path)):
-                # 这里简单处理，如果传入的是文件路径，尝试作为 pickle 或 json 读取
-                # 但推荐使用 cookie_manager
                 path = Path(cookies)
                 if path.exists():
                      if path.suffix == '.pkl':
@@ -109,7 +106,7 @@ class EsjzoneDownloader:
                 return response.content
         except Exception as e:
             logger.warning(f"下载图片失败: {url}, 错误: {e}")
-            raise e # 让 DownloadManager 处理重试
+            raise e
 
     def _dump_debug(self, response: Optional[requests.Response] = None, request: Optional[requests.PreparedRequest] = None, exception: Optional[Exception] = None):
         """
@@ -160,7 +157,6 @@ class EsjzoneDownloader:
 
             content = "\n".join(debug_info)
 
-            # 写入文件
             with file_path.open("w", encoding="utf-8") as f:
                 f.write(content)
             
@@ -253,10 +249,6 @@ class EsjzoneDownloader:
                             if status is not None and status != 200:
                                 msg = resp_json.get("msg", "")
                                 logger.warning(f"登录响应状态异常: {status}，msg: {msg}")
-                                # 如果是业务逻辑错误（如密码错误），重试可能没用，但在用户未明确指定错误类型时，暂且继续或直接返回False
-                                # 这里如果明确是密码错误，应该直接返回False。但在不确定情况下，继续下一次循环或返回。
-                                # 考虑到用户要求“失败重试”，这里如果是服务器问题可以重试，如果是密码错误应该停止。
-                                # 简单起见，这里算作一次失败尝试。
                                 continue
                         
                         # 再次校验
@@ -433,7 +425,6 @@ class EsjzoneDownloader:
                         logger.error(f"封面下载失败: {e}, 已跳过")
                         book.cover_image = None
 
-        # 将书籍信息构造为“第0章”
         intro_content = []
         if book.cover_image:
             intro_content.append(f'<div style="text-align: center;"><img src="images/cover{cover_ext}" alt="封面"/></div>')
@@ -568,15 +559,12 @@ class EsjzoneDownloader:
                     logger.debug(f"完整的 img 标签: {img}")
                     continue
 
-            # 生成唯一文件名
-            # 如果原图是 gif，保留后缀
             ext = ".png"
             if src.lower().endswith(".gif"):
                 ext = ".gif"
                 
             filename = f"{uuid.uuid4().hex}{ext}"
             
-            # 添加下载任务
             task = ImageTask(
                 url=src,
                 chapter_obj=chapter,
@@ -586,7 +574,6 @@ class EsjzoneDownloader:
             )
             tasks.append(task)
             
-            # 替换 src
             img["src"] = f"images/{filename}"
         manager.add_image_tasks(tasks)
         return str(soup)
@@ -595,7 +582,6 @@ class EsjzoneDownloader:
         """图片下载任务处理函数"""
         logger.debug(f"正在下载图片: {url}")
         
-        # 调用 download_image，如果失败会抛出异常，由 manager 捕获并重试
         with self.safe_request(url, stream=True) as response:
             img_data = response.content
             manager.report_bytes(len(img_data))
@@ -603,9 +589,7 @@ class EsjzoneDownloader:
         if not img_data:
             raise Exception("下载图片返回空数据")
 
-        # 转换格式
         try:
-            # 如果文件名是 gif，直接保存
             if filename.lower().endswith(".gif"):
                  final_data = img_data
             else:

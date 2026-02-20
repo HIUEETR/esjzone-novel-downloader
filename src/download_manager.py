@@ -36,38 +36,32 @@ class DownloadManager:
         self.workers = []
         self.stop_event = threading.Event()
         self.pause_event = threading.Event()
-        self.pause_event.set() # 初始状态为运行中
+        self.pause_event.set()
         
         self.lock = threading.Lock()
         self.active_threads = 0
-        self.pending_retries = 0  # 记录正在等待重试的任务数
+        self.pending_retries = 0
         
-        # 统计数据
         self.total_chapters = 0
         self.completed_chapters = 0
         self.total_images = 0
         self.completed_images = 0
         self.failed_tasks = 0
         
-        # 速率监控
         self.bytes_downloaded = 0
         self.start_time = time.time()
         
-        # 错误处理
         self.consecutive_errors = 0
         self.is_downgraded = False
         
-        # 加载配置
         dl_config = config.get('download', {})
         self.max_threads = dl_config.get('max_threads', 5)
         self.timeout = dl_config.get('timeout_seconds', 180)
-        # 默认重试次数改为2次，符合用户需求
         self.max_retries = dl_config.get('retry_attempts', 2)
         self.retry_delays = dl_config.get('retry_delays', [30, 60])
         
-        # 回调函数
-        self.on_progress = None # Function(type, completed, total)
-        self.on_rate_update = None # Function(rate_str)
+        self.on_progress = None
+        self.on_rate_update = None
 
     def add_chapter_task(self, task: ChapterTask):
         self.chapter_queue.put(task)
@@ -94,7 +88,6 @@ class DownloadManager:
         self.stop_event.clear()
         self.start_time = time.time()
         
-        # 清除现有工作线程（如果存在）
         self.workers = []
         
         for i in range(self.max_threads):
@@ -102,7 +95,6 @@ class DownloadManager:
             t.start()
             self.workers.append(t)
             
-        # 启动监控线程
         monitor_t = threading.Thread(target=self._monitor_loop, name="Monitor", daemon=True)
         monitor_t.start()
             
@@ -113,7 +105,6 @@ class DownloadManager:
             
     def wait_until_complete(self):
         while not self.stop_event.is_set():
-            # 只有当队列为空、活跃线程为0且没有正在等待重试的任务时，才算全部完成
             if (self.chapter_queue.empty() and 
                 self.image_queue.empty() and 
                 self.active_threads == 0 and 
@@ -123,23 +114,19 @@ class DownloadManager:
 
     def _worker_loop(self):
         while not self.stop_event.is_set():
-            # 检查暂停状态
             self.pause_event.wait()
             
-            # 检查磁盘空间
             if not self._check_disk_space():
                 logger.warning("磁盘空间不足！暂停下载。")
                 self.pause_event.clear()
                 continue
 
-            # 降级逻辑
             if self.is_downgraded:
                 if threading.current_thread().name != "Worker-0":
                     time.sleep(1)
                     continue
 
             try:
-                # 优先级: 章节 > 图片
                 task = None
                 task_type = None
                 
@@ -172,11 +159,9 @@ class DownloadManager:
 
     def _process_task(self, task: Task, task_type: str):
         try:
-            # 执行任务
             if task.callback:
                 task.callback(*task.args, **task.kwargs)
             
-            # 成功
             with self.lock:
                 self.consecutive_errors = 0
                 if self.is_downgraded:
@@ -208,17 +193,14 @@ class DownloadManager:
             delay = self.retry_delays[min(task.retry_count, len(self.retry_delays)-1)]
             logger.info(f"将在 {delay}秒后重试任务 {task.url} (尝试 {task.retry_count+1}/{self.max_retries})")
             
-            # 记录重试等待数
             with self.lock:
                 self.pending_retries += 1
                 
-            # 启动定时器线程重新入队
             threading.Timer(delay, self._requeue_task, args=[task, task_type]).start()
         else:
             logger.error(f"任务永久失败: {task.url}")
             with self.lock:
                 self.failed_tasks += 1
-                # 即使失败也视为已处理，以避免阻塞进度条
                 if task_type == 'chapter':
                     self.completed_chapters += 1
                 else:
