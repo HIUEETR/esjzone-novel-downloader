@@ -28,7 +28,11 @@ class ConfigLoader:
             "dir": "downloads",
             "download_format": "epub",
             "naming_mode": "book_name",
-            "use_book_dir": False
+            "use_book_dir": False,
+            "max_threads": 5,
+            "timeout_seconds": 180,
+            "retry_attempts": 3,
+            "retry_delays": [10, 15, 30]
         },
         "log": {
             "level": "INFO",
