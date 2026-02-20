@@ -389,9 +389,11 @@ class EsjzoneDownloader:
                     logger.info(f"正在下载封面 ⌈ 第 {attempt + 1} 次尝试 ⌋: {book.cover_url}")
                     img_data = None
                     try:
-                        with self.safe_request(book.cover_url, stream=True) as response:
+                        # 添加超时设置
+                        with self.safe_request(book.cover_url, stream=True, timeout=60) as response:
                              img_data = response.content
-                    except Exception:
+                    except Exception as e:
+                        logger.warning(f"下载封面请求异常: {e}")
                         pass
 
                     if not img_data:
