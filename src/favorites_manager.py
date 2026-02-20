@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from typing import List, Dict, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, MofNCompleteColumn
 
 from .client import EsjzoneDownloader
 from .logger_config import logger
@@ -96,6 +96,7 @@ class FavoritesManager:
                     SpinnerColumn(),
                     TextColumn("[progress.description]{task.description}"),
                     BarColumn(),
+                    MofNCompleteColumn(),
                     TaskProgressColumn(),
                     transient=True 
                 ) as progress:

@@ -226,44 +226,57 @@ class EsjzoneDownloader:
             "Referer": "https://www.esjzone.one/login",
         }
         
-        try:
-            logger.info("开始尝试账号密码登录...")
-            # 调试：打印部分账号信息以确认配置加载正确
-            masked_email = email[:3] + "***" if email else "None"
-            logger.debug(f"使用的账号: {masked_email}")
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt > 0:
+                    logger.info(f"正在重试登录 ({attempt}/{max_retries})...")
+                    
+                logger.info("开始尝试账号密码登录...")
+                # 调试：打印部分账号信息以确认配置加载正确
+                masked_email = email[:3] + "***" if email else "None"
+                logger.debug(f"使用的账号: {masked_email}")
 
-            with self.safe_request(login_url, method='POST', data=payload, headers=headers) as resp:
-                if resp.status_code == 200:
-                    logger.info("登录请求成功，正在验证是否实际登录有效...")
-                    # 调试：打印登录响应内容的前200个字符
-                    logger.debug(f"登录响应内容: {resp.text[:200]}")
-                    resp_json = None
-                    try:
-                        resp_json = resp.json()
-                    except Exception:
-                        logger.warning("登录响应不是合法 JSON，将继续使用 Cookie 校验")
-                    
-                    if isinstance(resp_json, dict):
-                        status = resp_json.get("status")
-                        if status is not None and status != 200:
-                            msg = resp_json.get("msg", "")
-                            logger.warning(f"登录响应状态异常: {status}，msg: {msg}")
-                            return False
-                    
-                    # 再次校验
-                    if self.validate_cookie():
-                        logger.info("登录并验证成功")
-                        self.save_current_cookies()
-                        return True
+                with self.safe_request(login_url, method='POST', data=payload, headers=headers) as resp:
+                    if resp.status_code == 200:
+                        logger.info("登录请求成功，正在验证是否实际登录有效...")
+                        # 调试：打印登录响应内容的前200个字符
+                        logger.debug(f"登录响应内容: {resp.text[:200]}")
+                        resp_json = None
+                        try:
+                            resp_json = resp.json()
+                        except Exception:
+                            logger.warning("登录响应不是合法 JSON，将继续使用 Cookie 校验")
+                        
+                        if isinstance(resp_json, dict):
+                            status = resp_json.get("status")
+                            if status is not None and status != 200:
+                                msg = resp_json.get("msg", "")
+                                logger.warning(f"登录响应状态异常: {status}，msg: {msg}")
+                                # 如果是业务逻辑错误（如密码错误），重试可能没用，但在用户未明确指定错误类型时，暂且继续或直接返回False
+                                # 这里如果明确是密码错误，应该直接返回False。但在不确定情况下，继续下一次循环或返回。
+                                # 考虑到用户要求“失败重试”，这里如果是服务器问题可以重试，如果是密码错误应该停止。
+                                # 简单起见，这里算作一次失败尝试。
+                                continue
+                        
+                        # 再次校验
+                        if self.validate_cookie():
+                            logger.info("登录并验证成功")
+                            self.save_current_cookies()
+                            return True
+                        else:
+                            logger.warning("登录请求返回200，但Cookie验证失败")
+                            # 验证失败，可能是需要重试
                     else:
-                        logger.warning("登录请求返回200，但Cookie验证失败")
-                        return False
-                else:
-                    logger.error(f"登录失败，状态码: {resp.status_code}")
-                    return False
-        except Exception as e:
-            logger.error(f"登录过程中发生异常: {e}")
-            return False
+                        logger.error(f"登录失败，状态码: {resp.status_code}")
+                        
+            except Exception as e:
+                logger.error(f"登录过程中发生异常: {e}")
+                if attempt < max_retries:
+                    time.sleep(2)
+                
+        logger.error("登录最终失败")
+        return False
 
     def save_current_cookies(self):
         """保存当前会话的 Cookie"""
@@ -286,16 +299,30 @@ class EsjzoneDownloader:
         profile_url = "https://www.esjzone.one/my/profile.html"
         logger.debug(f"正在校验 Cookie 有效性: {profile_url}")
         
-        try:
-            with self.safe_request(profile_url) as resp:
-                html = resp.text
-                if "window.location.href='/my/login';" in html:
-                    logger.warning("Cookie 已失效，已清理内存 Cookie")
-                    self.session.cookies.clear()
-                return cookie_manager.validate_and_return_username(html)
-        except Exception as e:
-            logger.error(f"校验 Cookie 时发生异常: {e}")
-            return None
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt > 0:
+                    logger.info(f"正在重试 Cookie 校验 ({attempt}/{max_retries})...")
+                    
+                with self.safe_request(profile_url) as resp:
+                    html = resp.text
+                    if "window.location.href='/my/login';" in html:
+                        logger.warning("Cookie 已失效，已清理内存 Cookie")
+                        self.session.cookies.clear()
+                        # Cookie 失效不需要重试，直接返回 None
+                        return None
+                    
+                    result = cookie_manager.validate_and_return_username(html)
+                    if result:
+                        return result
+                    
+            except Exception as e:
+                logger.error(f"校验 Cookie 时发生异常: {e}")
+                if attempt < max_retries:
+                    time.sleep(2)
+                    
+        return None
 
     def get_favorites(self, page: int = 1, sort_by: str = 'new') -> Tuple[List[Dict[str, str]], int]:
         """
@@ -324,9 +351,32 @@ class EsjzoneDownloader:
     def fetch_book(self, url: str, download_images: bool = True) -> Book:
         logger.info(f"开始解析书籍信息: {url}")
         
-        with self.safe_request(url) as resp:
-            html = resp.text
-            book = parse_book(html, url)
+        max_retries = 2
+        last_error = None
+        book = None
+        
+        for attempt in range(max_retries + 1):
+            try:
+                if attempt > 0:
+                    logger.info(f"正在重试解析书籍信息 ({attempt}/{max_retries})...")
+                    
+                with self.safe_request(url) as resp:
+                    html = resp.text
+                    book = parse_book(html, url)
+                # 成功则退出循环
+                break
+            except Exception as e:
+                last_error = e
+                logger.error(f"解析书籍信息失败: {e}")
+                if attempt < max_retries:
+                    time.sleep(2)
+        
+        if book is None:
+            logger.error(f"获取书籍信息最终失败，已重试 {max_retries} 次")
+            if last_error:
+                raise last_error
+            else:
+                raise Exception("获取书籍信息失败")
         
         logger.info(f"书籍解析成功: {book.title} (共 {len(book.chapters)} 章)")
 

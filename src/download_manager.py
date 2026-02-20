@@ -60,8 +60,9 @@ class DownloadManager:
         dl_config = config.get('download', {})
         self.max_threads = dl_config.get('max_threads', 5)
         self.timeout = dl_config.get('timeout_seconds', 180)
-        self.max_retries = dl_config.get('retry_attempts', 3)
-        self.retry_delays = dl_config.get('retry_delays', [30, 60, 120])
+        # 默认重试次数改为2次，符合用户需求
+        self.max_retries = dl_config.get('retry_attempts', 2)
+        self.retry_delays = dl_config.get('retry_delays', [30, 60])
         
         # 回调函数
         self.on_progress = None # Function(type, completed, total)
