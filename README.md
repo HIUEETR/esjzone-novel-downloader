@@ -5,12 +5,20 @@
 ## ✨ 功能特点
 
 - **多格式支持**: 支持下载为 EPUB 和 TXT 格式。
-- **交互式界面**: 简单易用的命令行交互菜单。
+  - EPUB 包含自动生成的封面、目录和简介页面。
+- **交互式界面**: 简单易用的命令行交互菜单，支持键盘操作。
+- **高级下载管理**:
+  - **多线程下载**: 极速下载体验，支持自定义线程数。
+  - **智能进度显示**: 实时显示下载进度条。
+  - **非阻塞图片获取**: 文字内容与插图并行下载，互不阻塞。
+- **书库管理**:
+  - **收藏夹同步**: 支持获取账号收藏夹内容（按更新时间或收藏时间排序）。
+  - **更新监控**: 可配置监控列表，自动检查并提示小说更新。
 - **自定义配置**:
-  - 自定义下载目录
-  - 自定义文件命名方式（书名或编号）
-  - 自动创建书籍子目录
-- **账号管理**: 支持设置账号密码（用于访问受限内容）。
+  - 自定义下载目录和文件命名方式（书名或编号）。
+  - 支持自动创建书籍子目录。
+  - 可调节超时时间与重试次数。
+- **账号管理**: 支持设置账号密码（用于访问受限内容），自动处理 Cookie。
 - **日志记录**: 详细的日志记录，方便排查问题。
 - **现代化依赖管理**: 使用 `uv` 进行极速依赖安装和环境管理。
 
@@ -31,6 +39,7 @@
    git clone git@github.com:HIUEETR/esjzone-novel-downloader.git
    cd esjzone-novel-downloader
    ```
+
 2. **运行启动脚本**
    双击运行 `start.bat` 或在命令行中执行：
 
@@ -55,10 +64,10 @@ uv run main.py
 ```
 
 **使用 pip:**
-由于项目默认使用 `pyproject.toml` 管理依赖，如果必须使用 pip，你需要手动安装依赖：
+由于项目默认使用 `pyproject.toml` 管理依赖，如果必须使用 pip，你需要手动安装所有依赖：
 
 ```bash
-pip install beautifulsoup4 colorama loguru pillow pyyaml questionary requests ruamel.yaml 
+pip install -r requirements.txt
 python main.py
 ```
 
@@ -74,6 +83,9 @@ python main.py
   - `format`: 下载格式 (`epub` 或 `txt`)
   - `naming_mode`: 命名模式 (`book_name` 或 `number`)
   - `use_book_dir`: 是否为每本书创建独立文件夹
+  - `max_threads`: 最大下载线程数
+  - `timeout_seconds`: 请求超时时间
+  - `retry_attempts`: 失败重试次数
 - **log**: 日志级别和保存路径
 
 ## 🛠️ 开发与贡献
@@ -82,8 +94,8 @@ python main.py
 
 ## ✅TODO List
 
-* [ ] 分章节下载
-* [ ] 监控更新
+* [X] 分章节下载
+* [X] 监控更新
 * [X] 获取收藏列表
 * [X] 鸣谢
 * [X] 多线程
@@ -97,7 +109,7 @@ python main.py
 * [X] 获取图片
 * [X] 获取小说
 
-## 🌟
+## 🌟 Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=HIUEETR/esjzone-novel-downloader&type=Date)](https://star-history.com/#HIUEETR/esjzone-novel-downloader&Date)
 
