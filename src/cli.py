@@ -245,11 +245,11 @@ def favorite_menu(downloader, favorites_manager):
     if sort_by == "返回上一级菜单":
         return
 
-    # 启动后台更新
-    favorites_manager.start_background_update(sort_by)
+    # 确保数据已更新（仅首次进入时更新）
+    favorites_manager.ensure_updated(sort_by)
 
     page = 1
-    items_per_page = 20
+    items_per_page = 10
     
     while True:
         clear_screen()
@@ -279,16 +279,31 @@ def favorite_menu(downloader, favorites_manager):
         
         # 添加导航提示信息
         choices.append(questionary.Separator(f"--- 第 {page} / {total_pages} 页 (共 {total_novels} 本) ---"))
-        if favorites_manager._updating:
-             choices.append(questionary.Separator(f"--- 后台更新中... ---"))
         
+        # 简单的对齐格式化
+        # 注意：由于中文字符宽度问题，纯文本对齐可能不完美，这里做简单截断处理
+        header = f"{'序号':>4}   {'标题':<28} | {'最新章节':<18} | {'更新时间'}"
+        choices.append(questionary.Separator(header))
+
         for idx, novel in enumerate(current_novels):
-            # 格式: 序号. 标题 | 最新: ... | 更新: ...
             abs_idx = start_idx + idx + 1
             title = novel['title']
             latest = novel['latest_chapter']
             update = novel['update_time']
-            label = f"{abs_idx}. {title} | 最新: {latest} | 更新: {update}"
+            
+            # 截断过长的标题和章节名
+            display_title = title
+            # 中文大致算2个字符宽，这里简单按长度截断，不够完美但可用
+            if len(display_title) > 25:
+                display_title = display_title[:23] + ".."
+            
+            display_latest = latest
+            if len(display_latest) > 15:
+                display_latest = display_latest[:13] + ".."
+
+            # 格式: 序号. 标题 | 最新: ... | 更新: ...
+            # 使用全角空格尝试微调中文对齐（视字体而定）
+            label = f"{abs_idx:>4}. {display_title:<25} | {display_latest:<15} | {update}"
             choices.append(questionary.Choice(label, value=novel))
             
         choices.append(questionary.Separator("--- 操作 ---"))
@@ -298,7 +313,7 @@ def favorite_menu(downloader, favorites_manager):
             choices.append(questionary.Choice(f"← 上一页 (第 {page-1} 页)", value="prev"))
         if page < total_pages:
             choices.append(questionary.Choice(f"→ 下一页 (第 {page+1} 页)", value="next"))
-            
+        
         choices.append(questionary.Choice("返回上一级菜单", value="back"))
         
         selection = questionary.select(
@@ -308,9 +323,6 @@ def favorite_menu(downloader, favorites_manager):
         ).ask()
         
         if selection == "back":
-            # 退出前停止后台更新（可选，但通常让它跑完或手动停止更好，这里我们不强制停止，允许后台继续更新）
-            # 如果希望退出菜单就停止更新，可以调用: favorites_manager.stop_update()
-            # 根据用户需求"后台多线程自动获取全部的小说更新到data"，暗示应该让它跑完。
             break
         elif selection == "prev":
             page -= 1

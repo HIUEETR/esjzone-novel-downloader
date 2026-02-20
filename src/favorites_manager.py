@@ -3,7 +3,8 @@ import threading
 import time
 from pathlib import Path
 from typing import List, Dict, Optional
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 from .client import EsjzoneDownloader
 from .logger_config import logger
@@ -20,12 +21,14 @@ class FavoritesManager:
             "favor": []  # 最近收藏
         }
         
+        # 记录本次启动后是否已更新过
+        self._updated_flags = {
+            "new": False,
+            "favor": False
+        }
+        
         # 线程锁
         self._lock = threading.RLock()
-        
-        # 后台更新状态
-        self._updating = False
-        self._stop_event = threading.Event()
         
         # 确保数据目录存在
         if not self.data_dir.exists():
@@ -64,78 +67,73 @@ class FavoritesManager:
         with self._lock:
             return self.cache.get(sort_by, [])
 
-    def start_background_update(self, sort_by: str):
-        """启动后台更新线程"""
-        if self._updating:
-            logger.warning("后台更新已在运行中")
+    def ensure_updated(self, sort_by: str):
+        """确保数据已更新（本次会话仅更新一次）"""
+        if self._updated_flags.get(sort_by):
             return
 
-        self._stop_event.clear()
-        self._updating = True
-        
-        # 在守护线程中启动
-        thread = threading.Thread(
-            target=self._update_loop,
-            args=(sort_by,),
-            daemon=True
-        )
-        thread.start()
-        logger.info(f"后台更新线程已启动 (排序: {sort_by})")
+        logger.info(f"正在更新收藏列表 ({sort_by})...")
+        self._update_favorites(sort_by)
+        self._updated_flags[sort_by] = True
 
-    def stop_update(self):
-        """停止后台更新"""
-        if self._updating:
-            self._stop_event.set()
-            # 这里不等待 join 以保持 UI 响应，仅发出停止信号
-            logger.info("正在停止后台更新...")
+    def _fetch_page(self, page: int, sort_by: str):
+        """获取单页数据的辅助函数"""
+        return self.downloader.get_favorites(page, sort_by)
 
-    def _update_loop(self, sort_by: str):
-        """后台更新循环"""
+    def _update_favorites(self, sort_by: str):
+        """执行更新逻辑（多线程 + 进度条）"""
+        # 暂时禁用客户端日志以避免干扰进度条
+        logger.disable("src.client")
         try:
-            page = 1
-            all_novels = []
-            total_pages = 1 # 初始猜测
+            # 1. 获取第一页以确定总页数
+            novels_p1, total_pages = self.downloader.get_favorites(1, sort_by)
+            results = {1: novels_p1}
             
-            while not self._stop_event.is_set():
-                try:
-                    # 获取页面
-                    logger.debug(f"正在获取第 {page} 页...")
-                    # sort_by 匹配缓存键: 'new' 或 'favor'
-                    novels, current_total_pages = self.downloader.get_favorites(page, sort_by)
-                    
-                    if not novels:
-                        logger.warning(f"第 {page} 页未获取到数据，停止更新")
-                        break
-                        
-                    # 如果总页数改变（通常在第一页），更新它
-                    if page == 1:
-                        total_pages = current_total_pages
-                        
-                    all_novels.extend(novels)
-                    
-                    # 增量更新还是最后更新？
-                    # 用户要求"update to data"
-                    # 最后统一更新以确保一致性
-                    
-                    logger.info(f"已获取第 {page}/{total_pages} 页，本页 {len(novels)} 本")
-                    
-                    if page >= total_pages:
-                        break
-                        
-                    page += 1
-                    time.sleep(1) # 礼貌请求
-                    
-                except Exception as e:
-                    logger.error(f"更新过程出错 (页码 {page}): {e}")
-                    break
-            
-            if all_novels and not self._stop_event.is_set():
-                with self._lock:
-                    self.cache[sort_by] = all_novels
-                    self.save_data()
-                logger.info(f"后台更新完成，共更新 {len(all_novels)} 本小说")
+            if total_pages > 1:
+                pages_to_fetch = list(range(2, total_pages + 1))
                 
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    BarColumn(),
+                    TaskProgressColumn(),
+                    transient=True 
+                ) as progress:
+                    task_id = progress.add_task(f"更新收藏列表 (共 {total_pages} 页)...", total=len(pages_to_fetch))
+                    
+                    with ThreadPoolExecutor(max_workers=5) as executor:
+                        future_to_page = {
+                            executor.submit(self._fetch_page, p, sort_by): p 
+                            for p in pages_to_fetch
+                        }
+                        
+                        for future in as_completed(future_to_page):
+                            page = future_to_page[future]
+                            try:
+                                novels, _ = future.result()
+                                results[page] = novels
+                            except Exception as e:
+                                logger.error(f"获取第 {page} 页失败: {e}")
+                                results[page] = [] # 保持空列表占位
+                            finally:
+                                progress.advance(task_id)
+            
+            # 按页码顺序合并
+            final_list = []
+            for p in sorted(results.keys()):
+                final_list.extend(results[p])
+                
+            with self._lock:
+                self.cache[sort_by] = final_list
+                self.save_data()
+                
+            # 恢复日志并在最后显示一条总结
+            logger.enable("src.client")
+            logger.info(f"收藏列表更新完成，共 {len(final_list)} 本")
+            
         except Exception as e:
-             logger.error(f"后台更新线程异常: {e}")
+            logger.enable("src.client")
+            logger.error(f"更新过程发生错误: {e}")
         finally:
-            self._updating = False
+            # 确保日志被重新启用
+            logger.enable("src.client")

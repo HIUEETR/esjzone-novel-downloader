@@ -134,8 +134,8 @@ def parse_favorites(html: str) -> Tuple[List[Dict[str, str]], int]:
     soup = BeautifulSoup(html, "html.parser")
     novels = []
     
-    # Parse novels
-    # The structure is usually inside a table
+    # 解析小说列表
+    # 结构通常在表格内
     for tr in soup.select("tr"):
         item = tr.select_one(".product-item")
         if not item:
@@ -153,7 +153,7 @@ def parse_favorites(html: str) -> Tuple[List[Dict[str, str]], int]:
         latest_chapter_elem = item.select_one(".book-ep .mr-3 a")
         latest_chapter = latest_chapter_elem.get_text(strip=True) if latest_chapter_elem else ""
         
-        # Last viewed is the second div in .book-ep
+        # 最后观看记录位于 .book-ep 的第二个 div 中
         book_ep_divs = item.select(".book-ep > div")
         last_viewed = ""
         if len(book_ep_divs) > 1:
@@ -170,7 +170,7 @@ def parse_favorites(html: str) -> Tuple[List[Dict[str, str]], int]:
             "update_time": update_time
         })
         
-    # Parse total pages
+    # 解析总页数
     total_pages = 1
     script_content = ""
     for script in soup.find_all("script"):
