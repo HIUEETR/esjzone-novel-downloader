@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 from urllib.parse import urljoin
+from typing import Tuple, List, Dict
 
 from bs4 import BeautifulSoup, Tag
 
@@ -121,4 +123,65 @@ def parse_chapter(html: str, url: str, title: str | None = None) -> Tuple[str, s
         node.decompose()
 
     return title or url, str(content)
+
+
+def parse_favorites(html: str) -> Tuple[List[Dict[str, str]], int]:
+    """
+    解析收藏夹/最近更新列表
+    返回: (小说列表, 总页数)
+    小说列表项: {title, url, latest_chapter, last_viewed, update_time}
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    novels = []
+    
+    # Parse novels
+    # The structure is usually inside a table
+    for tr in soup.select("tr"):
+        item = tr.select_one(".product-item")
+        if not item:
+            continue
+            
+        title_elem = item.select_one(".product-title a")
+        if not title_elem:
+            continue
+            
+        title = title_elem.get_text(strip=True)
+        url = title_elem.get("href")
+        if url and not url.startswith("http"):
+            url = f"https://www.esjzone.one{url}"
+            
+        latest_chapter_elem = item.select_one(".book-ep .mr-3 a")
+        latest_chapter = latest_chapter_elem.get_text(strip=True) if latest_chapter_elem else ""
+        
+        # Last viewed is the second div in .book-ep
+        book_ep_divs = item.select(".book-ep > div")
+        last_viewed = ""
+        if len(book_ep_divs) > 1:
+             last_viewed = book_ep_divs[1].get_text(strip=True).replace("最後觀看：", "").strip()
+             
+        update_time_elem = item.select_one(".book-update")
+        update_time = update_time_elem.get_text(strip=True).replace("更新日期：", "").strip() if update_time_elem else ""
+        
+        novels.append({
+            "title": title,
+            "url": url,
+            "latest_chapter": latest_chapter,
+            "last_viewed": last_viewed,
+            "update_time": update_time
+        })
+        
+    # Parse total pages
+    total_pages = 1
+    script_content = ""
+    for script in soup.find_all("script"):
+        if script.string and "bootpag" in script.string:
+            script_content = script.string
+            break
+            
+    if script_content:
+        match = re.search(r"total:\s*(\d+)", script_content)
+        if match:
+            total_pages = int(match.group(1))
+            
+    return novels, total_pages
 

@@ -21,7 +21,7 @@ from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, T
 
 from .epub import build_epub
 from .model import Book, Chapter
-from .parser import parse_book, parse_chapter
+from .parser import parse_book, parse_chapter, parse_favorites
 from .logger_config import logger
 from .config_loader import config
 from .cookie_manager import cookie_manager
@@ -296,6 +296,30 @@ class EsjzoneDownloader:
         except Exception as e:
             logger.error(f"校验 Cookie 时发生异常: {e}")
             return None
+
+    def get_favorites(self, page: int = 1, sort_by: str = 'new') -> Tuple[List[Dict[str, str]], int]:
+        """
+        获取收藏列表
+        sort_by: 'new' (最近更新) or 'favor' (最近收藏)
+        """
+        # 将语义化的 sort_by 映射为服务器预期的值/URL
+        if sort_by == 'new':
+            # "new" 在本应用中表示 "最近更新" -> 服务器使用 'udate'
+            cookie_val = 'udate'
+            url = f"https://www.esjzone.one/my/favorite/udate/{page}"
+        else:
+            # "favor" 在本应用中表示 "最近收藏" -> 服务器使用默认值 ('new'?)
+            cookie_val = 'new'
+            url = f"https://www.esjzone.one/my/favorite/{page}"
+            
+        self.session.cookies.set('favorite_sort', cookie_val, domain='www.esjzone.one', path='/')
+        
+        logger.info(f"正在获取收藏列表 (第 {page} 页, 排序: {sort_by})...")
+        
+        with self.safe_request(url) as resp:
+            html = resp.text
+            return parse_favorites(html)
+
 
     def fetch_book(self, url: str, download_images: bool = True) -> Book:
         logger.info(f"开始解析书籍信息: {url}")

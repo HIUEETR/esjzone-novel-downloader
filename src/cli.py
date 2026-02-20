@@ -7,6 +7,7 @@ from src.client import EsjzoneDownloader
 from src.config_loader import config
 from src.logger_config import logger
 from src.cookie_manager import cookie_manager
+from src.favorites_manager import FavoritesManager
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -227,13 +228,114 @@ def edit_config_menu():
         elif choice == "返回上一级菜单":
             break
 
-def function_menu(downloader):
+def favorite_menu(downloader, favorites_manager):
+    # 询问排序方式
+    sort_choices = [
+        questionary.Choice("按最近更新", value="new"),
+        questionary.Choice("按最近收藏", value="favor"),
+        "返回上一级菜单"
+    ]
+    
+    sort_by = questionary.select(
+        "请选择收藏夹排序方式：",
+        choices=sort_choices,
+        instruction="⌈ 使用↑↓选择 ⌋"
+    ).ask()
+    
+    if sort_by == "返回上一级菜单":
+        return
+
+    # 启动后台更新
+    favorites_manager.start_background_update(sort_by)
+
+    page = 1
+    items_per_page = 20
+    
+    while True:
+        clear_screen()
+        
+        # 获取所有数据（包含缓存和后台更新的数据）
+        novels = favorites_manager.get_novels(sort_by)
+        total_novels = len(novels)
+        
+        # 计算总页数
+        if total_novels == 0:
+            total_pages = 1
+        else:
+            total_pages = (total_novels + items_per_page - 1) // items_per_page
+            
+        # 确保页码在有效范围内
+        if page > total_pages:
+            page = total_pages
+        if page < 1:
+            page = 1
+            
+        # 获取当前页的小说
+        start_idx = (page - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+        current_novels = novels[start_idx:end_idx]
+
+        choices = []
+        
+        # 添加导航提示信息
+        choices.append(questionary.Separator(f"--- 第 {page} / {total_pages} 页 (共 {total_novels} 本) ---"))
+        if favorites_manager._updating:
+             choices.append(questionary.Separator(f"--- 后台更新中... ---"))
+        
+        for idx, novel in enumerate(current_novels):
+            # 格式: 序号. 标题 | 最新: ... | 更新: ...
+            abs_idx = start_idx + idx + 1
+            title = novel['title']
+            latest = novel['latest_chapter']
+            update = novel['update_time']
+            label = f"{abs_idx}. {title} | 最新: {latest} | 更新: {update}"
+            choices.append(questionary.Choice(label, value=novel))
+            
+        choices.append(questionary.Separator("--- 操作 ---"))
+        
+        # 添加分页选项
+        if page > 1:
+            choices.append(questionary.Choice(f"← 上一页 (第 {page-1} 页)", value="prev"))
+        if page < total_pages:
+            choices.append(questionary.Choice(f"→ 下一页 (第 {page+1} 页)", value="next"))
+            
+        choices.append(questionary.Choice("返回上一级菜单", value="back"))
+        
+        selection = questionary.select(
+            "我的收藏夹",
+            choices=choices,
+            instruction="⌈ 使用↑↓翻页/选择，回车确认 ⌋"
+        ).ask()
+        
+        if selection == "back":
+            # 退出前停止后台更新（可选，但通常让它跑完或手动停止更好，这里我们不强制停止，允许后台继续更新）
+            # 如果希望退出菜单就停止更新，可以调用: favorites_manager.stop_update()
+            # 根据用户需求"后台多线程自动获取全部的小说更新到data"，暗示应该让它跑完。
+            break
+        elif selection == "prev":
+            page -= 1
+        elif selection == "next":
+            page += 1
+        elif isinstance(selection, dict):
+            # 选中了一本小说
+            novel_url = selection['url']
+            novel_title = selection['title']
+            print(f"\n准备下载: {novel_title}")
+            try:
+                downloader.download(novel_url)
+            except Exception as e:
+                logger.error(f"下载失败: {e}")
+            
+            questionary.press_any_key_to_continue(message="按任意键继续...").ask()
+
+def function_menu(downloader, favorites_manager):
     while True:
         clear_screen()
         choice = questionary.select(
             "功能界面：",
             choices=[
                 "从网址获取小说",
+                "我的收藏夹",
                 "返回上一级菜单",
                 "退出"
             ],
@@ -254,12 +356,17 @@ def function_menu(downloader):
                 
                 questionary.press_any_key_to_continue(message="按任意键继续...").ask()
 
+        elif choice == "我的收藏夹":
+            favorite_menu(downloader, favorites_manager)
         elif choice == "返回上一级菜单":
             break
         elif choice == "退出":
             sys.exit(0)
 
 def main_menu(downloader, username=None):
+    # 初始化收藏夹管理器
+    favorites_manager = FavoritesManager(downloader)
+
     while True:
         clear_screen()
         print(f"用户：{username or '未登录'}")
@@ -274,7 +381,7 @@ def main_menu(downloader, username=None):
         ).ask()
         
         if choice == "进入功能界面":
-            function_menu(downloader)
+            function_menu(downloader, favorites_manager)
         elif choice == "编辑配置文件":
             edit_config_menu()
         elif choice == "退出":
@@ -302,7 +409,7 @@ def parse_cli_args():
         logger.info(f"命令行覆盖：最大重试次数设置为 {args.retry_attempts}")
 
 def run_cli():
-    # 0. 解析命令行参数
+    # 1. 解析命令行参数
     parse_cli_args()
     
     # 2. 初始化下载器
