@@ -21,7 +21,7 @@ from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, T
 
 from .epub import build_epub
 from .model import Book, Chapter
-from .parser import parse_book, parse_chapter, parse_favorites
+from .parser import parse_book, parse_chapter, parse_favorites, parse_novel_status
 from .logger_config import logger
 from .config_loader import config
 from .cookie_manager import cookie_manager
@@ -347,6 +347,16 @@ class EsjzoneDownloader:
             html = resp.text
             return parse_favorites(html)
 
+    def get_novel_status(self, url: str) -> Dict[str, str]:
+        """
+        获取小说的基本状态信息（用于检查更新）
+        只解析标题、更新时间和最新章节，不下载封面或解析完整章节列表。
+        """
+        logger.info(f"正在检查更新: {url}")
+        
+        with self.safe_request(url) as resp:
+            html = resp.text
+            return parse_novel_status(html, url)
 
     def fetch_book(self, url: str, download_images: bool = True) -> Book:
         logger.info(f"开始解析书籍信息: {url}")

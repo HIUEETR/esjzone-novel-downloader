@@ -3,48 +3,13 @@ import os
 import argparse
 import questionary
 import time
-import wcwidth
 from src.client import EsjzoneDownloader
 from src.config_loader import config
 from src.logger_config import logger
 from src.cookie_manager import cookie_manager
 from src.favorites_manager import FavoritesManager
-
-def clear_screen():
-    os.system('cls' if os.name == 'nt' else 'clear')
-
-def truncate_and_pad(text: str, target_width: int) -> str:
-    """
-    将字符串截断或填充至指定的显示宽度。
-    """
-    if not text:
-        text = ""
-        
-    text_width = wcwidth.wcswidth(text)
-    
-    if text_width <= target_width:
-        return text + " " * (target_width - text_width)
-    
-    # 需要截断
-    current_width = 0
-    result = ""
-    ellipsis = "…"
-    ellipsis_width = wcwidth.wcwidth(ellipsis)
-    if ellipsis_width < 0: ellipsis_width = 1
-    
-    for char in text:
-        char_width = wcwidth.wcwidth(char)
-        if char_width < 0: char_width = 0
-        
-        if current_width + char_width + ellipsis_width > target_width:
-            break
-        result += char
-        current_width += char_width
-        
-    result += ellipsis
-    
-    # 填充剩余空格
-    return result + " " * (target_width - current_width - ellipsis_width)
+from src.monitor import MonitorManager
+from src.utils import clear_screen, truncate_and_pad
 
 def _try_login():
     """尝试使用当前配置的账号密码登录"""
@@ -387,6 +352,28 @@ def favorite_menu(downloader, favorites_manager):
             
             questionary.press_any_key_to_continue(message="按任意键继续...").ask()
 
+def monitor_menu(downloader, favorites_manager):
+    monitor_manager = MonitorManager()
+    
+    while True:
+        clear_screen()
+        choice = questionary.select(
+            "获取最新小说：",
+            choices=[
+                "开始检查",
+                "配置",
+                "返回上一级菜单"
+            ],
+            instruction="⌈ 使用↑↓选择 ⌋"
+        ).ask()
+        
+        if choice == "开始检查":
+            monitor_manager.start_check(downloader)
+        elif choice == "配置":
+            monitor_manager.configure_monitor(favorites_manager)
+        elif choice == "返回上一级菜单":
+            break
+
 def function_menu(downloader, favorites_manager):
     while True:
         clear_screen()
@@ -395,6 +382,7 @@ def function_menu(downloader, favorites_manager):
             choices=[
                 "从网址获取小说",
                 "我的收藏夹",
+                "获取最新小说",
                 "返回上一级菜单",
                 "退出"
             ],
@@ -417,6 +405,8 @@ def function_menu(downloader, favorites_manager):
 
         elif choice == "我的收藏夹":
             favorite_menu(downloader, favorites_manager)
+        elif choice == "获取最新小说":
+            monitor_menu(downloader, favorites_manager)
         elif choice == "返回上一级菜单":
             break
         elif choice == "退出":

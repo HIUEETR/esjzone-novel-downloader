@@ -51,6 +51,16 @@ def parse_book(html: str, url: str) -> Book:
     if cover_url and not cover_url.startswith("http"):
          cover_url = urljoin(url, cover_url)
 
+    update_time = None
+    for li in soup.select("ul.book-detail li"):
+        text = li.get_text(strip=True)
+        if "最近更新" in text or "最后更新" in text or "最後更新" in text:
+            # Format usually like "最近更新: 2024-01-01"
+            parts = text.split(":", 1)
+            if len(parts) > 1:
+                update_time = parts[1].strip()
+            break
+
     tags = [a.get_text(strip=True) for a in soup.select("section.widget-tags.m-t-20 a.tag")]
     if not tags:
         # 尝试更宽泛的选择器
@@ -62,6 +72,7 @@ def parse_book(html: str, url: str) -> Book:
         author=author,
         introduction=introduction,
         cover_url=cover_url,
+        update_time=update_time,
         tags=tags,
     )
 
@@ -184,4 +195,40 @@ def parse_favorites(html: str) -> Tuple[List[Dict[str, str]], int]:
             total_pages = int(match.group(1))
             
     return novels, total_pages
+
+
+def parse_novel_status(html: str, url: str) -> Dict[str, str]:
+    """
+    轻量级解析小说状态，仅获取标题、更新时间和最新章节
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    title_node = soup.select_one(".book-detail h2")
+    title = _get_text_or_empty(title_node) if title_node else "未知标题"
+
+    update_time = "未知时间"
+    for li in soup.select("ul.book-detail li"):
+        text = li.get_text(strip=True)
+        if "最近更新" in text or "最后更新" in text or "最後更新" in text:
+            parts = text.split(":", 1)
+            if len(parts) > 1:
+                update_time = parts[1].strip()
+            break
+            
+    latest_chapter = ""
+    chapter_container = soup.select_one("#chapterList")
+    if chapter_container:
+        # 查找所有链接，取最后一个
+        # 这里的链接可能嵌套在 details 中，find_all 会递归查找
+        all_links = chapter_container.find_all("a")
+        if all_links:
+            last_link = all_links[-1]
+            latest_chapter = _guess_chapter_title(last_link)
+            
+    return {
+        "title": title,
+        "url": url,
+        "update_time": update_time,
+        "latest_chapter": latest_chapter
+    }
 
