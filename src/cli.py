@@ -278,7 +278,7 @@ def favorite_menu(downloader, favorites_manager):
         choices = []
         
         # 添加导航提示信息
-        choices.append(questionary.Separator(f"--- 第 {page} / {total_pages} 页 (共 {total_novels} 本) ---"))
+        choices.append(questionary.Separator(f"--- 第 {page} / {total_pages} 页 ⌈ 共 {total_novels} 本 ⌋ ---"))
         
         # 简单的对齐格式化
         # 注意：由于中文字符宽度问题，纯文本对齐可能不完美，这里做简单截断处理
@@ -310,9 +310,9 @@ def favorite_menu(downloader, favorites_manager):
         
         # 添加分页选项
         if page > 1:
-            choices.append(questionary.Choice(f"← 上一页 (第 {page-1} 页)", value="prev"))
+            choices.append(questionary.Choice(f"← 上一页 ⌈ 第 {page-1} 页 ⌋", value="prev"))
         if page < total_pages:
-            choices.append(questionary.Choice(f"→ 下一页 (第 {page+1} 页)", value="next"))
+            choices.append(questionary.Choice(f"→ 下一页 ⌈ 第 {page+1} 页 ⌋", value="next"))
         
         choices.append(questionary.Choice("返回上一级菜单", value="back"))
         
