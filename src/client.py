@@ -38,7 +38,7 @@ class EsjzoneDownloader:
         self.base_delay = base_delay
         
         # 初始化调试目录
-        self.debug_dir = Path("debug_dump")
+        self.debug_dir = Path("debug")
         # self.debug_dir.mkdir(parents=True, exist_ok=True) # 默认不创建
         self._lock = threading.Lock()
         self._pbar_lock = threading.Lock() # 用于进度条更新的锁
@@ -122,7 +122,7 @@ class EsjzoneDownloader:
 
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             unique_id = str(uuid.uuid4())
-            filename = f"debug_{timestamp}_{unique_id}.html"
+            filename = f"debug_{timestamp}_{unique_id}.log"
             file_path = self.debug_dir / filename
 
             debug_info = []
