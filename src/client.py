@@ -402,6 +402,9 @@ class EsjzoneDownloader:
                     if image_obj.format == "JPEG":
                         book.cover_image = img_data
                         cover_ext = ".jpg"
+                    elif image_obj.format == "GIF":
+                        book.cover_image = img_data
+                        cover_ext = ".gif"
                     else:
                         # 转换为 PNG
                         output_buffer = BytesIO()
@@ -545,15 +548,18 @@ class EsjzoneDownloader:
                     src = f"https://www.esjzone.one{src}"
                 else:
                     logger.warning(f"跳过无法解析的图片链接: {src}")
+                    # 添加调试日志
+                    logger.debug(f"无效链接所在的章节: {chapter.title} ({chapter.url})")
+                    logger.debug(f"完整的 img 标签: {img}")
                     continue
 
             # 生成唯一文件名
-            # 这里我们不确定图片格式，先假设为 png (转换后) 或者 jpg
-            # 实际上我们可以在下载后确定，但是我们需要现在就替换 src
-            # 为了简单，我们统一使用 uuid.png (下载时会处理格式)
-            # 或者我们可以保留扩展名如果 url 有的话
-            
-            filename = f"{uuid.uuid4().hex}.png" # 默认统一转为 png
+            # 如果原图是 gif，保留后缀
+            ext = ".png"
+            if src.lower().endswith(".gif"):
+                ext = ".gif"
+                
+            filename = f"{uuid.uuid4().hex}{ext}"
             
             # 添加下载任务
             task = ImageTask(
@@ -584,22 +590,18 @@ class EsjzoneDownloader:
 
         # 转换格式
         try:
-            image_obj = Image.open(BytesIO(img_data))
-            final_data = None
+            # 如果文件名是 gif，直接保存
+            if filename.lower().endswith(".gif"):
+                 final_data = img_data
+            else:
+                image_obj = Image.open(BytesIO(img_data))
+                final_data = None
+                
+                output_buffer = BytesIO()
+                image_obj.save(output_buffer, format="PNG")
+                final_data = output_buffer.getvalue()
             
-            # 即使我们预设了 .png，如果原图是 jpg，我们可以尝试保存为 jpg 并修改 filename?
-            # 不，因为 HTML 里的 src 已经被替换为 .png 了。
-            # 所以这里必须强制转为 PNG，或者我们应该在替换 src 之前检查 URL 后缀?
-            # 为了兼容性，统一转 PNG 是最安全的。
-            
-            output_buffer = BytesIO()
-            image_obj.save(output_buffer, format="PNG")
-            final_data = output_buffer.getvalue()
-            
-            # 保存到章节对象 (线程安全吗？Python dict setitem 是原子的，但多线程并发写入不同 key 是安全的)
-            # Chapter 对象被多个线程共享吗？
-            # 一个章节只会被一个线程处理(ChapterTask)，但该章节的图片可能被多个线程并发处理(ImageTask)。
-            # chapter.images 是 dict。多线程并发写入不同 key 是安全的 (CPython GIL)。
+
             chapter.images[filename] = final_data
             
         except Exception as e:

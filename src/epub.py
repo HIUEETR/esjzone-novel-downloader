@@ -84,9 +84,10 @@ def build_epub(book: Book, chapters: Iterable[Chapter], output_path: str | Path)
 
         # 写入图片资源
         cover_id = None
+        cover_ext = ".png" # 默认值
+        
         if book.cover_image:
             # 检测封面图片格式
-            cover_ext = ".png"
             cover_mime = "image/png"
             try:
                 # 使用 with 确保文件句柄关闭
@@ -94,11 +95,17 @@ def build_epub(book: Book, chapters: Iterable[Chapter], output_path: str | Path)
                     if img.format == "JPEG":
                         cover_ext = ".jpg"
                         cover_mime = "image/jpeg"
+                    elif img.format == "GIF":
+                        cover_ext = ".gif"
+                        cover_mime = "image/gif"
             except Exception:
                 pass # 默认使用 png
 
+            # 写入封面文件
             zf.writestr(f"OEBPS/images/cover{cover_ext}", book.cover_image)
             cover_id = "cover_img"
+            
+            # 添加到 manifest
             manifest_items.append(
                 f'<item id="{cover_id}" href="images/cover{cover_ext}" media-type="{cover_mime}" properties="cover-image"/>'
             )
