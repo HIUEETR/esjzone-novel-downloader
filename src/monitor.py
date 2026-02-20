@@ -7,7 +7,7 @@ import concurrent.futures
 import questionary
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 
 import time
 from src.logger_config import logger
