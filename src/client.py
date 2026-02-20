@@ -433,6 +433,9 @@ class EsjzoneDownloader:
         if book.tags:
              intro_content.append(f"<p><strong>Tags:</strong> {', '.join(book.tags)}</p>")
         
+        intro_content.append(f"<p><strong>源网址:</strong> <a href=\"{book.url}\">{book.url}</a></p>")
+        intro_content.append(f"<p>由 <a href=\"https://github.com/HIUEETR/esjzone-novel-downloader\">esjzone-novel-downloader</a> 生成</p>")
+        
         intro_content.append(f"<h3>简介</h3>")
         intro_lines = book.introduction.split('\n')
         for line in intro_lines:
@@ -716,14 +719,38 @@ class EsjzoneDownloader:
 
         final_path = self._resolve_output_path(url, filename, download_dir_override)
         
-        lines = [f"{book.title}\n", f"{book.author}\n\n", f"{book.introduction}\n\n"]
+        lines = []
+        lines.append(f"{book.title}\n")
+        lines.append(f"作者: {book.author}\n")
+        
+        if book.tags:
+             lines.append(f"Tags: {', '.join(book.tags)}\n")
+        
+        lines.append(f"源网址: {book.url}\n")
+        lines.append("由 esjzone-novel-downloader 生成 (https://github.com/HIUEETR/esjzone-novel-downloader)\n\n")
+        
+        lines.append("简介:\n")
+        lines.append(f"{book.introduction}\n\n")
+        
+        lines.append("目录:\n")
         for ch in book.chapters:
-            lines.append(ch.title + "\n")
+             lines.append(f"{ch.title}\n")
+        lines.append("\n" + "="*20 + "\n\n")
+
+        for ch in book.chapters:
+            lines.append(f"{ch.title}\n")
+            lines.append("-" * len(ch.title) + "\n\n")
             if ch.content_text:
                 lines.append(ch.content_text + "\n\n")
         
-        final_path.write_text("".join(lines), encoding="utf-8")
-        logger.info(f"TXT 下载完成: {final_path}")
+        try:
+            with open(final_path, 'w', encoding="utf-8") as f:
+                f.writelines(lines)
+            logger.info(f"TXT 下载完成: {final_path}")
+        except Exception as e:
+            logger.error(f"TXT 写入失败: {e}")
+            raise
+            
         return final_path
 
     def download_epub(self, url: str, output_path: Optional[Union[str, Path]] = None, download_dir_override: Optional[str] = None) -> Path:
