@@ -40,6 +40,7 @@ class DownloadManager:
         
         self.lock = threading.Lock()
         self.active_threads = 0
+        self.pending_retries = 0  # 记录正在等待重试的任务数
         
         # 统计数据
         self.total_chapters = 0
@@ -112,7 +113,11 @@ class DownloadManager:
             
     def wait_until_complete(self):
         while not self.stop_event.is_set():
-            if self.chapter_queue.empty() and self.image_queue.empty() and self.active_threads == 0:
+            # 只有当队列为空、活跃线程为0且没有正在等待重试的任务时，才算全部完成
+            if (self.chapter_queue.empty() and 
+                self.image_queue.empty() and 
+                self.active_threads == 0 and 
+                self.pending_retries == 0):
                 break
             time.sleep(0.5)
 
@@ -203,6 +208,10 @@ class DownloadManager:
             delay = self.retry_delays[min(task.retry_count, len(self.retry_delays)-1)]
             logger.info(f"将在 {delay}秒后重试任务 {task.url} (尝试 {task.retry_count+1}/{self.max_retries})")
             
+            # 记录重试等待数
+            with self.lock:
+                self.pending_retries += 1
+                
             # 启动定时器线程重新入队
             threading.Timer(delay, self._requeue_task, args=[task, task_type]).start()
         else:
@@ -226,6 +235,9 @@ class DownloadManager:
             self.chapter_queue.put(task)
         else:
             self.image_queue.put(task)
+            
+        with self.lock:
+            self.pending_retries -= 1
 
     def _check_disk_space(self, min_free_mb=200):
         try:
