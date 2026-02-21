@@ -62,6 +62,7 @@ class DownloadManager:
         
         self.on_progress = None
         self.on_rate_update = None
+        self._prefer_image = False
 
     def add_chapter_task(self, task: ChapterTask):
         self.chapter_queue.put(task)
@@ -127,19 +128,10 @@ class DownloadManager:
                     continue
 
             try:
-                task = None
-                task_type = None
-                
-                try:
-                    task = self.chapter_queue.get_nowait()
-                    task_type = 'chapter'
-                except queue.Empty:
-                    try:
-                        task = self.image_queue.get_nowait()
-                        task_type = 'image'
-                    except queue.Empty:
-                        time.sleep(0.1)
-                        continue
+                task, task_type = self._dequeue_task()
+                if not task:
+                    time.sleep(0.05)
+                    continue
                 
                 with self.lock:
                     self.active_threads += 1
@@ -181,6 +173,50 @@ class DownloadManager:
         except Exception as e:
             logger.error(f"任务失败: {task.url}, 错误: {e}")
             self._handle_failure(task, task_type, e)
+
+    def _try_get(self, q: queue.Queue):
+        try:
+            return q.get_nowait()
+        except queue.Empty:
+            return None
+
+    def _dequeue_task(self):
+        if self.chapter_queue.empty() and self.image_queue.empty():
+            return None, None
+
+        if not self.chapter_queue.empty() and not self.image_queue.empty():
+            if self._prefer_image:
+                task = self._try_get(self.image_queue)
+                if task:
+                    self._prefer_image = False
+                    return task, 'image'
+                task = self._try_get(self.chapter_queue)
+                if task:
+                    self._prefer_image = True
+                    return task, 'chapter'
+            else:
+                task = self._try_get(self.chapter_queue)
+                if task:
+                    self._prefer_image = True
+                    return task, 'chapter'
+                task = self._try_get(self.image_queue)
+                if task:
+                    self._prefer_image = False
+                    return task, 'image'
+            return None, None
+
+        if not self.chapter_queue.empty():
+            task = self._try_get(self.chapter_queue)
+            if task:
+                self._prefer_image = True
+                return task, 'chapter'
+            return None, None
+
+        task = self._try_get(self.image_queue)
+        if task:
+            self._prefer_image = False
+            return task, 'image'
+        return None, None
 
     def _handle_failure(self, task: Task, task_type: str, error: Exception):
         with self.lock:
