@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import re
+from typing import Dict, List, Tuple
 from urllib.parse import urljoin
-from typing import Tuple, List, Dict
 
 from bs4 import BeautifulSoup, Tag
 
@@ -48,7 +48,7 @@ def parse_book(html: str, url: str) -> Book:
         cover_node = soup.select_one(".book-detail img")
     cover_url = cover_node.get("src") if cover_node else None
     if cover_url and not cover_url.startswith("http"):
-         cover_url = urljoin(url, cover_url)
+        cover_url = urljoin(url, cover_url)
 
     update_time = None
     for li in soup.select("ul.book-detail li"):
@@ -59,7 +59,9 @@ def parse_book(html: str, url: str) -> Book:
                 update_time = parts[1].strip()
             break
 
-    tags = [a.get_text(strip=True) for a in soup.select("section.widget-tags.m-t-20 a.tag")]
+    tags = [
+        a.get_text(strip=True) for a in soup.select("section.widget-tags.m-t-20 a.tag")
+    ]
     if not tags:
         tags = [a.get_text(strip=True) for a in soup.select(".widget-tags a.tag")]
 
@@ -141,52 +143,60 @@ def parse_favorites(html: str) -> Tuple[List[Dict[str, str]], int]:
     """
     soup = BeautifulSoup(html, "html.parser")
     novels = []
-    
+
     for tr in soup.select("tr"):
         item = tr.select_one(".product-item")
         if not item:
             continue
-            
+
         title_elem = item.select_one(".product-title a")
         if not title_elem:
             continue
-            
+
         title = title_elem.get_text(strip=True)
         url = title_elem.get("href")
         if url and not url.startswith("http"):
             url = f"https://www.esjzone.one{url}"
-            
+
         latest_chapter_elem = item.select_one(".book-ep .mr-3 a")
-        latest_chapter = latest_chapter_elem.get_text(strip=True) if latest_chapter_elem else ""
-        
+        latest_chapter = (
+            latest_chapter_elem.get_text(strip=True) if latest_chapter_elem else ""
+        )
+
         book_ep_divs = item.select(".book-ep > div")
         last_viewed = ""
         if len(book_ep_divs) > 1:
-             last_viewed = book_ep_divs[1].get_text(strip=True).replace("最後觀看：", "").strip()
-             
+            last_viewed = (
+                book_ep_divs[1].get_text(strip=True).replace("最後觀看：", "").strip()
+            )
+
         update_time_elem = item.select_one(".book-update")
-        update_time = update_time_elem.get_text(strip=True).replace("更新日期：", "").strip() if update_time_elem else ""
-        
+        update_time = (
+            update_time_elem.get_text(strip=True).replace("更新日期：", "").strip()
+            if update_time_elem
+            else ""
+        )
+
         novels.append({
             "title": title,
             "url": url,
             "latest_chapter": latest_chapter,
             "last_viewed": last_viewed,
-            "update_time": update_time
+            "update_time": update_time,
         })
-        
+
     total_pages = 1
     script_content = ""
     for script in soup.find_all("script"):
         if script.string and "bootpag" in script.string:
             script_content = script.string
             break
-            
+
     if script_content:
         match = re.search(r"total:\s*(\d+)", script_content)
         if match:
             total_pages = int(match.group(1))
-            
+
     return novels, total_pages
 
 
@@ -207,7 +217,7 @@ def parse_novel_status(html: str, url: str) -> Dict[str, str]:
             if len(parts) > 1:
                 update_time = parts[1].strip()
             break
-            
+
     latest_chapter = ""
     chapter_container = soup.select_one("#chapterList")
     if chapter_container:
@@ -215,11 +225,10 @@ def parse_novel_status(html: str, url: str) -> Dict[str, str]:
         if all_links:
             last_link = all_links[-1]
             latest_chapter = _guess_chapter_title(last_link)
-            
+
     return {
         "title": title,
         "url": url,
         "update_time": update_time,
-        "latest_chapter": latest_chapter
+        "latest_chapter": latest_chapter,
     }
-

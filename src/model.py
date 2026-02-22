@@ -27,4 +27,3 @@ class Book:
     update_time: Optional[str] = None
     tags: List[str] = field(default_factory=list)
     chapters: List[Chapter] = field(default_factory=list)
-

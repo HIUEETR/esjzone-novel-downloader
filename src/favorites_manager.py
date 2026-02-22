@@ -4,36 +4,41 @@ import time
 from pathlib import Path
 from typing import List, Dict, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, MofNCompleteColumn
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+    MofNCompleteColumn,
+)
 
 from .client import EsjzoneDownloader
 from .logger_config import logger
+
 
 class FavoritesManager:
     def __init__(self, downloader: EsjzoneDownloader, data_dir: str = "data"):
         self.downloader = downloader
         self.data_dir = Path(data_dir)
         self.data_file = self.data_dir / "favorites.json"
-        
+
         # 从文件加载缓存
         self.cache: Dict[str, List[Dict]] = {
-            "new": [],   # 最近更新
-            "favor": []  # 最近收藏
+            "new": [],  # 最近更新
+            "favor": [],  # 最近收藏
         }
-        
+
         # 记录本次启动后是否已更新过
-        self._updated_flags = {
-            "new": False,
-            "favor": False
-        }
-        
+        self._updated_flags = {"new": False, "favor": False}
+
         # 线程锁
         self._lock = threading.RLock()
-        
+
         # 确保数据目录存在
         if not self.data_dir.exists():
             self.data_dir.mkdir(parents=True, exist_ok=True)
-            
+
         self.load_data()
 
     def load_data(self):
@@ -48,7 +53,9 @@ class FavoritesManager:
                             for key in ["new", "favor"]:
                                 if key in data:
                                     self.cache[key] = data[key]
-                    logger.info(f"已加载本地收藏数据: new={len(self.cache['new'])}, favor={len(self.cache['favor'])}")
+                    logger.info(
+                        f"已加载本地收藏数据: new={len(self.cache['new'])}, favor={len(self.cache['favor'])}"
+                    )
                 except Exception as e:
                     logger.error(f"加载收藏数据失败: {e}")
 
@@ -88,7 +95,7 @@ class FavoritesManager:
             # 1. 获取第一页以确定总页数
             novels_p1, total_pages = self.downloader.get_favorites(1, sort_by)
             results = {1: novels_p1}
-            
+
             # 无论是否有下一页，都显示进度条以提供反馈
             with Progress(
                 SpinnerColumn(),
@@ -96,20 +103,26 @@ class FavoritesManager:
                 BarColumn(),
                 MofNCompleteColumn(),
                 TaskProgressColumn(),
-                transient=True 
+                transient=True,
             ) as progress:
                 # 任务总数设置为 total_pages，初始完成 1 (第一页已完成)
-                task_id = progress.add_task(f"更新收藏列表 (共 {total_pages} 页)...", total=total_pages, completed=1)
-                
+                task_id = progress.add_task(
+                    f"更新收藏列表 (共 {total_pages} 页)...",
+                    total=total_pages,
+                    completed=1,
+                )
+
                 if total_pages > 1:
                     pages_to_fetch = list(range(2, total_pages + 1))
-                    
+
                     with ThreadPoolExecutor(max_workers=5) as executor:
                         future_to_page = {
-                            executor.submit(self.downloader.get_favorites, p, sort_by): p 
+                            executor.submit(
+                                self.downloader.get_favorites, p, sort_by
+                            ): p
                             for p in pages_to_fetch
                         }
-                        
+
                         for future in as_completed(future_to_page):
                             page = future_to_page[future]
                             try:
@@ -117,23 +130,23 @@ class FavoritesManager:
                                 novels, _ = future.result()
                                 results[page] = novels
                             except Exception as e:
-                                results[page] = [] 
+                                results[page] = []
                             finally:
                                 progress.advance(task_id)
-            
+
             # 按页码顺序合并
             final_list = []
             for p in sorted(results.keys()):
                 final_list.extend(results[p])
-                
+
             with self._lock:
                 self.cache[sort_by] = final_list
                 self.save_data()
-                
+
             # 恢复日志并在最后显示一条总结
             logger.enable("src.client")
             logger.info(f"收藏列表更新完成，共 {len(final_list)} 本")
-            
+
         except Exception as e:
             logger.enable("src.client")
             logger.error(f"更新过程发生错误: {e}")
