@@ -51,15 +51,17 @@ class EsjzoneDownloader:
         self._pbar_lock = threading.Lock()
 
         # 设置默认请求头
-        self.session.headers.update({
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0 Safari/537.36"
-            ),
-            "Accept": "*/*",
-            "Connection": "keep-alive",
-        })
+        self.session.headers.update(
+            {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0 Safari/537.36"
+                ),
+                "Accept": "*/*",
+                "Connection": "keep-alive",
+            }
+        )
 
         # 优先使用传入的 cookies，否则尝试加载默认
         if cookies:
@@ -381,16 +383,16 @@ class EsjzoneDownloader:
         用于在下载前显示章节信息供用户选择
         """
         logger.info(f"开始获取书籍信息: {url}")
-        
+
         max_retries = 2
         last_error = None
         book = None
-        
+
         for attempt in range(max_retries + 1):
             try:
                 if attempt > 0:
                     logger.info(f"正在重试获取书籍信息 ({attempt}/{max_retries})...")
-                    
+
                 with self.safe_request(url) as resp:
                     html = resp.text
                     book = parse_book(html, url)
@@ -400,14 +402,14 @@ class EsjzoneDownloader:
                 logger.error(f"获取书籍信息失败: {e}")
                 if attempt < max_retries:
                     time.sleep(2)
-        
+
         if book is None:
             logger.error(f"获取书籍信息最终失败，已重试 {max_retries} 次")
             if last_error:
                 raise last_error
             else:
                 raise Exception("获取书籍信息失败")
-        
+
         logger.info(f"书籍解析成功: {book.title} (共 {len(book.chapters)} 章)")
         return book
 
@@ -797,94 +799,127 @@ class EsjzoneDownloader:
             logger.error(msg)
             raise ValueError(msg)
 
-    def download_with_range(self, url: str, start_idx: int, end_idx: int, output_path: Optional[Union[str, Path]] = None, download_dir_override: Optional[str] = None) -> Path:
+    def download_with_range(
+        self,
+        url: str,
+        start_idx: int,
+        end_idx: int,
+        output_path: Optional[Union[str, Path]] = None,
+        download_dir_override: Optional[str] = None,
+    ) -> Path:
         """
         下载指定范围的章节
         start_idx: 起始章节索引（从0开始，包含）
         end_idx: 结束章节索引（包含）
         """
-        download_config = config.get('download', {})
-        fmt = download_config.get('download_format', 'epub').lower()
-        
-        if fmt == 'epub':
-            return self._download_epub_with_range(url, start_idx, end_idx, output_path, download_dir_override)
-        elif fmt == 'txt':
-            return self._download_text_with_range(url, start_idx, end_idx, output_path, download_dir_override)
+        download_config = config.get("download", {})
+        fmt = download_config.get("download_format", "epub").lower()
+
+        if fmt == "epub":
+            return self._download_epub_with_range(
+                url, start_idx, end_idx, output_path, download_dir_override
+            )
+        elif fmt == "txt":
+            return self._download_text_with_range(
+                url, start_idx, end_idx, output_path, download_dir_override
+            )
         else:
             msg = f"不支持的下载格式: {fmt}，仅支持 'epub' 或 'txt'"
             logger.error(msg)
             raise ValueError(msg)
 
-    def _download_text_with_range(self, url: str, start_idx: int, end_idx: int, output_path: Optional[Union[str, Path]] = None, download_dir_override: Optional[str] = None) -> Path:
-        book = self._fetch_book_with_range(url, start_idx, end_idx, download_images=False)
-        
+    def _download_text_with_range(
+        self,
+        url: str,
+        start_idx: int,
+        end_idx: int,
+        output_path: Optional[Union[str, Path]] = None,
+        download_dir_override: Optional[str] = None,
+    ) -> Path:
+        book = self._fetch_book_with_range(
+            url, start_idx, end_idx, download_images=False
+        )
+
         if not output_path or str(output_path) in ["output.txt", "output.epub"]:
             filename = self._get_filename(book, url, "txt")
         else:
             filename = str(output_path)
 
         final_path = self._resolve_output_path(url, filename, download_dir_override)
-        
+
         lines = []
         lines.append(f"{book.title}\n")
         lines.append(f"作者: {book.author}\n")
-        
+
         if book.tags:
-             lines.append(f"Tags: {', '.join(book.tags)}\n")
-        
+            lines.append(f"Tags: {', '.join(book.tags)}\n")
+
         lines.append(f"源网址: {book.url}\n")
-        lines.append("由 esjzone-novel-downloader 生成 (https://github.com/HIUEETR/esjzone-novel-downloader)\n\n")
-        
+        lines.append(
+            "由 esjzone-novel-downloader 生成 (https://github.com/HIUEETR/esjzone-novel-downloader)\n\n"
+        )
+
         lines.append("简介:\n")
         lines.append(f"{book.introduction}\n\n")
-        
+
         lines.append(f"目录 (章节 {start_idx + 1} - {end_idx + 1}):\n")
         for ch in book.chapters:
-             lines.append(f"{ch.title}\n")
-        lines.append("\n" + "="*20 + "\n\n")
+            lines.append(f"{ch.title}\n")
+        lines.append("\n" + "=" * 20 + "\n\n")
 
         for ch in book.chapters:
             lines.append(f"{ch.title}\n")
             lines.append("-" * len(ch.title) + "\n\n")
             if ch.content_text:
                 lines.append(ch.content_text + "\n\n")
-        
+
         try:
-            with open(final_path, 'w', encoding="utf-8") as f:
+            with open(final_path, "w", encoding="utf-8") as f:
                 f.writelines(lines)
             logger.info(f"TXT 下载完成: {final_path}")
         except Exception as e:
             logger.error(f"TXT 写入失败: {e}")
             raise
-            
+
         return final_path
 
-    def _download_epub_with_range(self, url: str, start_idx: int, end_idx: int, output_path: Optional[Union[str, Path]] = None, download_dir_override: Optional[str] = None) -> Path:
-        book = self._fetch_book_with_range(url, start_idx, end_idx, download_images=True)
-        
+    def _download_epub_with_range(
+        self,
+        url: str,
+        start_idx: int,
+        end_idx: int,
+        output_path: Optional[Union[str, Path]] = None,
+        download_dir_override: Optional[str] = None,
+    ) -> Path:
+        book = self._fetch_book_with_range(
+            url, start_idx, end_idx, download_images=True
+        )
+
         if not output_path or str(output_path) in ["output.txt", "output.epub"]:
             filename = self._get_filename(book, url, "epub")
         else:
             filename = str(output_path)
 
         final_path = self._resolve_output_path(url, filename, download_dir_override)
-        
+
         build_epub(book, book.chapters, final_path)
         logger.info(f"EPUB 下载完成: {final_path}")
         return final_path
 
-    def _fetch_book_with_range(self, url: str, start_idx: int, end_idx: int, download_images: bool = True) -> Book:
+    def _fetch_book_with_range(
+        self, url: str, start_idx: int, end_idx: int, download_images: bool = True
+    ) -> Book:
         logger.info(f"开始获取书籍信息: {url}")
-        
+
         max_retries = 2
         last_error = None
         book = None
-        
+
         for attempt in range(max_retries + 1):
             try:
                 if attempt > 0:
                     logger.info(f"正在重试获取书籍信息 ({attempt}/{max_retries})...")
-                    
+
                 with self.safe_request(url) as resp:
                     html = resp.text
                     book = parse_book(html, url)
@@ -894,39 +929,45 @@ class EsjzoneDownloader:
                 logger.error(f"获取书籍信息失败: {e}")
                 if attempt < max_retries:
                     time.sleep(2)
-        
+
         if book is None:
             logger.error(f"获取书籍信息最终失败，已重试 {max_retries} 次")
             if last_error:
                 raise last_error
             else:
                 raise Exception("获取书籍信息失败")
-        
+
         total_chapters = len(book.chapters)
         if start_idx < 0:
             start_idx = 0
         if end_idx >= total_chapters:
             end_idx = total_chapters - 1
-        
-        logger.info(f"书籍: {book.title}，选择下载章节 {start_idx + 1} - {end_idx + 1} (共 {end_idx - start_idx + 1} 章)")
+
+        logger.info(
+            f"书籍: {book.title}，选择下载章节 {start_idx + 1} - {end_idx + 1} (共 {end_idx - start_idx + 1} 章)"
+        )
 
         cover_ext = ".png"
         if download_images and book.cover_url:
             max_retries = 2
             for attempt in range(max_retries + 1):
                 try:
-                    logger.info(f"正在下载封面 ⌈ 第 {attempt + 1} 次尝试 ⌋: {book.cover_url}")
+                    logger.info(
+                        f"正在下载封面 ⌈ 第 {attempt + 1} 次尝试 ⌋: {book.cover_url}"
+                    )
                     img_data = None
                     try:
-                        with self.safe_request(book.cover_url, stream=True, timeout=60) as response:
-                             img_data = response.content
+                        with self.safe_request(
+                            book.cover_url, stream=True, timeout=60
+                        ) as response:
+                            img_data = response.content
                     except Exception as e:
                         logger.warning(f"下载封面请求异常: {e}")
                         pass
 
                     if not img_data:
                         raise Exception("下载失败，返回空数据")
-                    
+
                     image_obj = Image.open(BytesIO(img_data))
                     if image_obj.format == "JPEG":
                         book.cover_image = img_data
@@ -940,7 +981,7 @@ class EsjzoneDownloader:
                         book.cover_image = output_buffer.getvalue()
                         cover_ext = ".png"
                     break
-                    
+
                 except Exception as e:
                     if attempt < max_retries:
                         logger.warning(f"封面下载失败: {e}, 正在重试...")
@@ -949,35 +990,47 @@ class EsjzoneDownloader:
                         logger.error(f"封面下载失败: {e}, 已跳过")
                         book.cover_image = None
 
-        target_chapters = book.chapters[start_idx:end_idx + 1]
-        
+        target_chapters = book.chapters[start_idx : end_idx + 1]
+
         intro_content = []
         if book.cover_image:
-            intro_content.append(f'<div style="text-align: center;"><img src="images/cover{cover_ext}" alt="封面"/></div>')
-        
+            intro_content.append(
+                f'<div style="text-align: center;"><img src="images/cover{cover_ext}" alt="封面"/></div>'
+            )
+
         intro_content.append(f"<h1>{book.title}</h1>")
         intro_content.append(f"<p><strong>作者:</strong> {book.author}</p>")
         if book.tags:
-             intro_content.append(f"<p><strong>Tags:</strong> {', '.join(book.tags)}</p>")
-        
-        intro_content.append(f"<p><strong>源网址:</strong> <a href=\"{book.url}\">{book.url}</a></p>")
-        intro_content.append(f"<p>由 <a href=\"https://github.com/HIUEETR/esjzone-novel-downloader\">esjzone-novel-downloader</a> 生成</p>")
-        intro_content.append(f"<p><strong>章节范围:</strong> {start_idx + 1} - {end_idx + 1} (共 {len(target_chapters)} 章)</p>")
-        
-        intro_content.append(f"<h3>简介</h3>")
-        intro_lines = book.introduction.split('\n')
+            intro_content.append(
+                f"<p><strong>Tags:</strong> {', '.join(book.tags)}</p>"
+            )
+
+        intro_content.append(
+            f'<p><strong>源网址:</strong> <a href="{book.url}">{book.url}</a></p>'
+        )
+        intro_content.append(
+            '<p>由 <a href="https://github.com/HIUEETR/esjzone-novel-downloader">esjzone-novel-downloader</a> 生成</p>'
+        )
+        intro_content.append(
+            f"<p><strong>章节范围:</strong> {start_idx + 1} - {end_idx + 1} (共 {len(target_chapters)} 章)</p>"
+        )
+
+        intro_content.append("<h3>简介</h3>")
+        intro_lines = book.introduction.split("\n")
         for line in intro_lines:
             if line.strip():
                 intro_content.append(f"<p>{line.strip()}</p>")
-        
-        intro_content.append(f"<h3>目录</h3>")
+
+        intro_content.append("<h3>目录</h3>")
         intro_content.append("<ul>")
         for ch in target_chapters:
-            intro_content.append(f'<li><a href="chapter_{ch.index}.xhtml">{ch.title}</a></li>')
+            intro_content.append(
+                f'<li><a href="chapter_{ch.index}.xhtml">{ch.title}</a></li>'
+            )
         intro_content.append("</ul>")
 
         intro_html = "\n".join(intro_content)
-        
+
         intro_chapter = Chapter(
             url=book.url,
             title="书籍信息",
@@ -987,7 +1040,7 @@ class EsjzoneDownloader:
         )
 
         manager = DownloadManager()
-        
+
         progress = Progress(
             TextColumn("[progress.description]{task.description}"),
             BarColumn(),
@@ -996,24 +1049,30 @@ class EsjzoneDownloader:
             SpinnerColumn(),
             TextColumn("{task.fields[info]}"),
         )
-        
-        chapter_task_id = progress.add_task("下载章节", total=len(target_chapters), info="")
+
+        chapter_task_id = progress.add_task(
+            "下载章节", total=len(target_chapters), info=""
+        )
         image_task_id = progress.add_task("下载图片", total=0, info="")
-        
+
         def progress_callback(type, completed, total):
-            if type == 'chapter':
+            if type == "chapter":
                 progress.update(chapter_task_id, completed=completed, total=total)
             else:
-                progress.update(image_task_id, completed=completed, total=total if total > 0 else None)
-        
+                progress.update(
+                    image_task_id,
+                    completed=completed,
+                    total=total if total > 0 else None,
+                )
+
         def rate_callback(rate, threads):
             info_str = f"速率: {rate}, 线程: {threads}"
             progress.update(chapter_task_id, info=info_str)
             progress.update(image_task_id, info=info_str)
-            
+
         manager.on_progress = progress_callback
         manager.on_rate_update = rate_callback
-        
+
         try:
             with progress:
                 for ch in target_chapters:
@@ -1021,10 +1080,10 @@ class EsjzoneDownloader:
                         url=ch.url,
                         chapter_obj=ch,
                         callback=self._process_chapter_task,
-                        args=(ch, download_images, manager)
+                        args=(ch, download_images, manager),
                     )
                     manager.add_chapter_task(task)
-                    
+
                 manager.start()
                 manager.wait_until_complete()
         except KeyboardInterrupt:
@@ -1033,13 +1092,20 @@ class EsjzoneDownloader:
             raise
         finally:
             manager.stop()
-        
-        logger.info(f"下载完成。成功: {manager.completed_chapters} 章, {manager.completed_images} 图。失败: {manager.failed_tasks}")
-        
+
+        logger.info(
+            f"下载完成。成功: {manager.completed_chapters} 章, {manager.completed_images} 图。失败: {manager.failed_tasks}"
+        )
+
         book.chapters = [intro_chapter] + target_chapters
         return book
 
-    def download_text(self, url: str, output_path: Optional[Union[str, Path]] = None, download_dir_override: Optional[str] = None) -> Path:
+    def download_text(
+        self,
+        url: str,
+        output_path: Optional[Union[str, Path]] = None,
+        download_dir_override: Optional[str] = None,
+    ) -> Path:
         book = self.fetch_book(url, download_images=False)
 
         # 如果未指定 output_path，或者指定的是临时名称，则根据配置生成

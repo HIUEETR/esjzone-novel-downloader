@@ -177,13 +177,15 @@ def parse_favorites(html: str) -> Tuple[List[Dict[str, str]], int]:
             else ""
         )
 
-        novels.append({
-            "title": title,
-            "url": url,
-            "latest_chapter": latest_chapter,
-            "last_viewed": last_viewed,
-            "update_time": update_time,
-        })
+        novels.append(
+            {
+                "title": title,
+                "url": url,
+                "latest_chapter": latest_chapter,
+                "last_viewed": last_viewed,
+                "update_time": update_time,
+            }
+        )
 
     total_pages = 1
     script_content = ""

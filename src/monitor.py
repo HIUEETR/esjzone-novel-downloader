@@ -1,12 +1,10 @@
 import json
-import os
 import re
 from pathlib import Path
 from typing import List, Dict, Optional
 import concurrent.futures
 import questionary
 from rich.console import Console
-from rich.table import Table
 from rich.progress import (
     Progress,
     SpinnerColumn,
@@ -16,19 +14,19 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
+
 import time
 from src.logger_config import logger
-from src.config_loader import config
 from src.client import EsjzoneDownloader
 from src.utils import clear_screen, truncate_and_pad
 from src.parser import parse_book
+from src.download_manager import DownloadManager, ChapterTask
+from src.epub import build_epub
 
 DATA_DIR = Path("data")
 MONITOR_FILE = DATA_DIR / "monitor.json"
 LATEST_FILE = DATA_DIR / "latest.json"
 
-from src.download_manager import DownloadManager, ChapterTask, ImageTask
-from src.epub import build_epub
 
 console = Console()
 

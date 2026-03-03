@@ -411,34 +411,40 @@ def function_menu(downloader, favorites_manager):
                 try:
                     book = downloader.get_book_chapters(url)
                     total_chapters = len(book.chapters)
-                    
+
                     print(f"\n书名: {book.title}")
                     print(f"作者: {book.author}")
                     print(f"共 {total_chapters} 章")
-                    
+
                     range_input = questionary.text(
                         f"请输入下载章节范围 (1-{total_chapters})，格式如 '1-100'，留空下载全部："
                     ).ask()
-                    
+
                     if range_input and range_input.strip():
                         try:
-                            if '-' in range_input:
-                                parts = range_input.strip().split('-')
+                            if "-" in range_input:
+                                parts = range_input.strip().split("-")
                                 if len(parts) == 2:
                                     start = int(parts[0].strip())
                                     end = int(parts[1].strip())
-                                    
+
                                     if start < 1:
                                         start = 1
                                     if end > total_chapters:
                                         end = total_chapters
-                                    
+
                                     if start > end:
-                                        print(f"起始章节不能大于结束章节，将交换两者...")
+                                        print(
+                                            "起始章节不能大于结束章节，将交换两者..."
+                                        )
                                         start, end = end, start
-                                    
-                                    print(f"\n将下载第 {start} 章到第 {end} 章 (共 {end - start + 1} 章)")
-                                    downloader.download_with_range(url, start - 1, end - 1)
+
+                                    print(
+                                        f"\n将下载第 {start} 章到第 {end} 章 (共 {end - start + 1} 章)"
+                                    )
+                                    downloader.download_with_range(
+                                        url, start - 1, end - 1
+                                    )
                                 else:
                                     print("格式错误，将下载全部章节...")
                                     downloader.download(url)
@@ -449,14 +455,16 @@ def function_menu(downloader, favorites_manager):
                                 if single_chapter > total_chapters:
                                     single_chapter = total_chapters
                                 print(f"\n将只下载第 {single_chapter} 章")
-                                downloader.download_with_range(url, single_chapter - 1, single_chapter - 1)
+                                downloader.download_with_range(
+                                    url, single_chapter - 1, single_chapter - 1
+                                )
                         except ValueError:
                             print("输入格式错误，将下载全部章节...")
                             downloader.download(url)
                     else:
                         print(f"\n将下载全部 {total_chapters} 章")
                         downloader.download(url)
-                        
+
                 except Exception as e:
                     logger.error(f"下载失败: {e}")
 

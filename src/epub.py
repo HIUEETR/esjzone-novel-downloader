@@ -14,8 +14,7 @@ from .model import Book, Chapter
 
 def escape_xml(text: str) -> str:
     return (
-        text
-        .replace("&", "&amp;")
+        text.replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace('"', "&quot;")
@@ -157,9 +156,9 @@ def build_epub(
         now = _dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # 构建 tags 元数据
-        tags_xml = "\n    ".join([
-            f"<dc:subject>{escape_xml(tag)}</dc:subject>" for tag in book.tags
-        ])
+        tags_xml = "\n    ".join(
+            [f"<dc:subject>{escape_xml(tag)}</dc:subject>" for tag in book.tags]
+        )
 
         # 构建 description
         description_xml = (

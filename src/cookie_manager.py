@@ -52,7 +52,7 @@ class CookieManager:
         校验 Cookie 有效性并返回用户名
         """
         # 1. 检查是否包含特定的重定向脚本 (Cookie 失效特征)
-        
+
         # invalid_signature = (
         #     '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />\n'
         #     '<script language="javascript">\n'
