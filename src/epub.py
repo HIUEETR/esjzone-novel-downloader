@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import datetime as _dt
 import uuid
 import zipfile
-import datetime as _dt
+from io import BytesIO
 from pathlib import Path
 from typing import Iterable
-from io import BytesIO
+
 from PIL import Image
 
 from .model import Book, Chapter
@@ -13,7 +14,8 @@ from .model import Book, Chapter
 
 def escape_xml(text: str) -> str:
     return (
-        text.replace("&", "&amp;")
+        text
+        .replace("&", "&amp;")
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace('"', "&quot;")
@@ -21,12 +23,16 @@ def escape_xml(text: str) -> str:
     )
 
 
-def build_epub(book: Book, chapters: Iterable[Chapter], output_path: str | Path) -> None:
+def build_epub(
+    book: Book, chapters: Iterable[Chapter], output_path: str | Path
+) -> None:
     output_path = Path(output_path)
     book_id = str(uuid.uuid4())
 
     with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+        zf.writestr(
+            "mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED
+        )
 
         container_xml = """<?xml version="1.0" encoding="utf-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -39,7 +45,7 @@ def build_epub(book: Book, chapters: Iterable[Chapter], output_path: str | Path)
 
         spine_items: list[str] = []
         manifest_items: list[str] = []
-        
+
         # 用于收集所有图片，避免重复写入
         all_images: dict[str, tuple[bytes, str]] = {}
 
@@ -84,8 +90,8 @@ def build_epub(book: Book, chapters: Iterable[Chapter], output_path: str | Path)
 
         # 写入图片资源
         cover_id = None
-        cover_ext = ".png" # 默认值
-        
+        cover_ext = ".png"  # 默认值
+
         if book.cover_image:
             # 检测封面图片格式
             cover_mime = "image/png"
@@ -99,12 +105,12 @@ def build_epub(book: Book, chapters: Iterable[Chapter], output_path: str | Path)
                         cover_ext = ".gif"
                         cover_mime = "image/gif"
             except Exception:
-                pass # 默认使用 png
+                pass  # 默认使用 png
 
             # 写入封面文件
             zf.writestr(f"OEBPS/images/cover{cover_ext}", book.cover_image)
             cover_id = "cover_img"
-            
+
             # 添加到 manifest
             manifest_items.append(
                 f'<item id="{cover_id}" href="images/cover{cover_ext}" media-type="{cover_mime}" properties="cover-image"/>'
@@ -131,7 +137,7 @@ def build_epub(book: Book, chapters: Iterable[Chapter], output_path: str | Path)
   <navMap>
 """
         for i, ch in enumerate(chapters):
-             ncx_content += f"""    <navPoint id="navPoint-{i+1}" playOrder="{i+1}">
+            ncx_content += f"""    <navPoint id="navPoint-{i + 1}" playOrder="{i + 1}">
       <navLabel>
         <text>{escape_xml(ch.title)}</text>
       </navLabel>
@@ -142,18 +148,26 @@ def build_epub(book: Book, chapters: Iterable[Chapter], output_path: str | Path)
 </ncx>
 """
         zf.writestr("OEBPS/toc.ncx", ncx_content)
-        manifest_items.append('<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>')
+        manifest_items.append(
+            '<item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>'
+        )
 
         manifest = "\n    ".join(manifest_items)
         spine = "\n    ".join(spine_items)
         now = _dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
 
         # 构建 tags 元数据
-        tags_xml = "\n    ".join([f"<dc:subject>{escape_xml(tag)}</dc:subject>" for tag in book.tags])
-        
+        tags_xml = "\n    ".join([
+            f"<dc:subject>{escape_xml(tag)}</dc:subject>" for tag in book.tags
+        ])
+
         # 构建 description
-        description_xml = f"<dc:description>{escape_xml(book.introduction)}</dc:description>" if book.introduction else ""
-        
+        description_xml = (
+            f"<dc:description>{escape_xml(book.introduction)}</dc:description>"
+            if book.introduction
+            else ""
+        )
+
         # 构建 cover meta
         cover_meta = f'<meta name="cover" content="{cover_id}" />' if cover_id else ""
 
@@ -178,4 +192,3 @@ def build_epub(book: Book, chapters: Iterable[Chapter], output_path: str | Path)
 </package>
 """
         zf.writestr("OEBPS/content.opf", content_opf)
-

@@ -3,6 +3,7 @@ from pathlib import Path
 from loguru import logger
 import logging
 
+
 def setup_logger(log_level: str = "INFO", log_dir: str = "./logs", retention: int = 30):
     """
     配置 loguru 日志系统
@@ -24,17 +25,12 @@ def setup_logger(log_level: str = "INFO", log_dir: str = "./logs", retention: in
     )
 
     # 添加控制台输出
-    logger.add(
-        sys.stderr,
-        format=log_format,
-        level=log_level,
-        colorize=True
-    )
+    logger.add(sys.stderr, format=log_format, level=log_level, colorize=True)
 
     # 添加文件输出 (按天轮转)
     # 文件名格式: esjzone_downloader_YYYY-MM-DD.log
     log_file_path = log_path / "esjzone_downloader_{time:YYYY-MM-DD}.log"
-    
+
     logger.add(
         log_file_path,
         format=log_format,
@@ -42,7 +38,7 @@ def setup_logger(log_level: str = "INFO", log_dir: str = "./logs", retention: in
         rotation="00:00",  # 每天午夜轮转
         retention=f"{retention} days",  # 保留指定天数
         encoding="utf-8",
-        enqueue=True  # 线程安全
+        enqueue=True,  # 线程安全
     )
 
     # 拦截标准库 logging (可选，如果依赖库使用了 logging)
@@ -65,8 +61,9 @@ def setup_logger(log_level: str = "INFO", log_dir: str = "./logs", retention: in
             )
 
     logging.basicConfig(handlers=[InterceptHandler()], level=0)
-    
+
     logger.info("日志系统初始化完成")
+
 
 # 导出 logger 实例
 __all__ = ["setup_logger", "logger"]
