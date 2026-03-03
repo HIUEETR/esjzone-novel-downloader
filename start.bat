@@ -27,3 +27,4 @@ if errorlevel 1 (
     echo [ERROR] Application exited with error.
     pause
 )
+
