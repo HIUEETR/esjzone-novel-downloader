@@ -81,44 +81,45 @@ def parse_book(html: str, url: str) -> Book:
 
     chapter_index = 0
     section_index = 0
-    section_name: str | None = None
+    details_section_map: Dict[int, Tuple[int, str | None]] = {}
 
-    for node in chapter_container.children:
-        if not isinstance(node, Tag):
+    # 兼容章节列表被包裹在 h2/span/details 等多层嵌套结构中的情况。
+    for a in chapter_container.find_all("a"):
+        href = (a.get("href") or "").strip()
+        if not href or href in {"#", "javascript:void(0)"}:
             continue
-        if node.name == "a":
-            chapter_index += 1
-            title_text = _guess_chapter_title(node)
-            chapter_url = urljoin(url, node.get("href", ""))
-            book.chapters.append(
-                Chapter(
-                    url=chapter_url,
-                    title=title_text,
-                    index=chapter_index,
-                    section_name=section_name,
-                    section_index=section_index or None,
-                )
+
+        title_text = _guess_chapter_title(a)
+        if not title_text or title_text in {"<", ">"}:
+            continue
+
+        current_section_name: str | None = None
+        current_section_index: int | None = None
+
+        details_node = a.find_parent("details")
+        if details_node is not None:
+            details_id = id(details_node)
+            if details_id not in details_section_map:
+                section_index += 1
+                summary = details_node.find("summary")
+                section_name = _get_text_or_empty(summary) or None
+                details_section_map[details_id] = (section_index, section_name)
+
+            current_section_index, current_section_name = details_section_map[
+                details_id
+            ]
+
+        chapter_index += 1
+        chapter_url = urljoin(url, href)
+        book.chapters.append(
+            Chapter(
+                url=chapter_url,
+                title=title_text,
+                index=chapter_index,
+                section_name=current_section_name,
+                section_index=current_section_index,
             )
-        elif node.name == "details":
-            summary = node.find("summary")
-            section_name = _get_text_or_empty(summary)
-            section_index += 1
-            for a in node.find_all("a"):
-                chapter_index += 1
-                title_text = _guess_chapter_title(a)
-                chapter_url = urljoin(url, a.get("href", ""))
-                book.chapters.append(
-                    Chapter(
-                        url=chapter_url,
-                        title=title_text,
-                        index=chapter_index,
-                        section_name=section_name,
-                        section_index=section_index,
-                    )
-                )
-        elif node.name == "p":
-            section_name = _get_text_or_empty(node)
-            section_index += 1
+        )
 
     return book
 
