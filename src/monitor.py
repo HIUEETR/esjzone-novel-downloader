@@ -433,6 +433,7 @@ class MonitorManager:
 
         try:
             with progress:
+                logger.disable("src")
                 for ch in target_chapters:
                     task = ChapterTask(
                         url=ch.url,
@@ -445,6 +446,7 @@ class MonitorManager:
                 manager.start()
                 manager.wait_until_complete()
         finally:
+            logger.enable("src")
             manager.stop()
 
         range_filename = f"{book.title}_更新_{len(target_chapters)}章.epub"

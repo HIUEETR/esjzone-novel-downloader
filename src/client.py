@@ -576,6 +576,7 @@ class EsjzoneDownloader:
 
         try:
             with progress:
+                logger.disable("src")
                 # 提交章节任务 (跳过第0章介绍)
                 for ch in book.chapters[1:]:
                     task = ChapterTask(
@@ -589,10 +590,12 @@ class EsjzoneDownloader:
                 manager.start()
                 manager.wait_until_complete()
         except KeyboardInterrupt:
+            logger.enable("src")
             logger.warning("用户中断下载，正在停止...")
             manager.stop()
             raise
         finally:
+            logger.enable("src")
             manager.stop()
 
         logger.info(
@@ -1075,6 +1078,7 @@ class EsjzoneDownloader:
 
         try:
             with progress:
+                logger.disable("src")
                 for ch in target_chapters:
                     task = ChapterTask(
                         url=ch.url,
@@ -1087,10 +1091,12 @@ class EsjzoneDownloader:
                 manager.start()
                 manager.wait_until_complete()
         except KeyboardInterrupt:
+            logger.enable("src")
             logger.warning("用户中断下载，正在停止...")
             manager.stop()
             raise
         finally:
+            logger.enable("src")
             manager.stop()
 
         logger.info(
