@@ -1,6 +1,7 @@
 account:
   username: ""  # 你的 ESJZone 账号
-  password: ""  # 你的 ESJZone 密码（明文仅保存在本地 config.yaml，请勿提交到 Git）
+  # 密码写入后会以 enc:v1: 密文保存（Fernet + 本机 machine-id），请勿提交到 Git
+  password: ""
 cookie:
   path: data/cookies.json  # 存储登录状态的 Cookie 文件路径
 download:
