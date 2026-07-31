@@ -241,36 +241,48 @@ class EsjzoneDownloader:
         """
         统一的请求封装，确保 Cookie 自动管理并统一处理异常。
         使用上下文管理器以捕获解析阶段的异常。
-        对 session.request 加锁，降低多线程共享 Session 的竞态风险。
+
+        仅在发起请求/读取响应头阶段短持锁，正文下载在锁外进行，
+        避免章节与图片在多 worker 下被全局锁串行化。
         """
         response = None
         try:
-            # 执行请求
             logger.debug(f"正在请求: {url}")
+            # 调用方可显式 stream=True/False；默认改为 stream 以便锁外读 body
+            want_stream = bool(kwargs.pop("stream", False))
             with self._lock:
-                response = self.session.request(method, url, **kwargs)
+                # stream=True: request() 在读完 headers 后返回，Set-Cookie 已写入 jar
+                response = self.session.request(
+                    method, url, stream=True, **kwargs
+                )
 
-            # 检查 HTTP 错误
+            # 检查 HTTP 错误（此时尚未（或未完全）消费 body）
             if not response.ok:
-                # 状态码异常立即转储
                 self._dump_debug(
                     response, exception=f"非预期状态码: {response.status_code}"
                 )
                 response.raise_for_status()
 
+            if not want_stream:
+                # 非流式语义：在锁外把正文读入，保持 response.content / .text 可用
+                _ = response.content
+
             yield response
 
         except Exception as e:
-            # 捕获请求异常或解析异常
             req = None
             if response is None and isinstance(e, RequestException):
                 req = e.request
 
-            # 转储调试信息
             self._dump_debug(response=response, request=req, exception=e)
-
-            # 重新抛出异常
             raise e
+        finally:
+            # stream 响应需要关闭连接，避免连接池耗尽
+            if response is not None:
+                try:
+                    response.close()
+                except Exception:
+                    pass
 
     def login(self, email: str = None, password: str = None) -> bool:
         """

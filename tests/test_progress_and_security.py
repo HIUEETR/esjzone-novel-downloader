@@ -7,7 +7,11 @@ from unittest.mock import MagicMock
 
 from src.client import _redact_headers, _truncate_text
 from src.download_manager import DownloadManager
-from src.progress_ui import bind_download_progress, create_download_progress
+from src.progress_ui import (
+    AlignedMofNCompleteColumn,
+    bind_download_progress,
+    create_download_progress,
+)
 
 
 class SecurityHelpersTest(unittest.TestCase):
@@ -65,12 +69,36 @@ class ProgressBindTest(unittest.TestCase):
         progress = create_download_progress()
         column_types = [type(c).__name__ for c in progress.columns]
         self.assertIn("TaskProgressColumn", column_types)
-        self.assertIn("MofNCompleteColumn", column_types)
+        self.assertIn("AlignedMofNCompleteColumn", column_types)
         # 百分比在 m/n 之前
         self.assertLess(
             column_types.index("TaskProgressColumn"),
-            column_types.index("MofNCompleteColumn"),
+            column_types.index("AlignedMofNCompleteColumn"),
         )
+
+    def test_mofn_slash_aligns_across_tasks(self):
+        progress = create_download_progress()
+        mofn = next(
+            c for c in progress.columns if isinstance(c, AlignedMofNCompleteColumn)
+        )
+        # 模拟两行：章节 22/153、图片 10/12
+        chapter = type("T", (), {"completed": 22, "total": 153})()
+        image = type("T", (), {"completed": 10, "total": 12})()
+        # 先渲染位数更大的，再渲染小的，宽度应保持
+        s1 = str(mofn.render(chapter))
+        s2 = str(mofn.render(image))
+        self.assertEqual(s1.index("/"), s2.index("/"), f"{s1!r} vs {s2!r}")
+        # 反向顺序预热也应对齐
+        progress2 = create_download_progress()
+        mofn2 = next(
+            c for c in progress2.columns if isinstance(c, AlignedMofNCompleteColumn)
+        )
+        # bind 会用章节 total 预热；这里手动预热
+        mofn2.state.total_width = 3
+        mofn2.state.completed_width = 3
+        a = str(mofn2.render(image))
+        b = str(mofn2.render(chapter))
+        self.assertEqual(a.index("/"), b.index("/"), f"{a!r} vs {b!r}")
 
 class SlidingRateTest(unittest.TestCase):
     def test_rate_uses_recent_window_not_lifetime_average(self):
