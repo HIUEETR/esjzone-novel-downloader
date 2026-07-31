@@ -2,8 +2,9 @@ import queue
 import shutil
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, Deque, List, Optional, Tuple
 
 from .config_loader import config
 from .logger_config import logger
@@ -51,6 +52,9 @@ class DownloadManager:
 
         self.bytes_downloaded = 0
         self.start_time = time.time()
+        # 瞬时速率：最近 N 秒内的 (timestamp, bytes) 滑动窗口
+        self.rate_window_seconds = 5.0
+        self._byte_events: Deque[Tuple[float, int]] = deque()
 
         self.consecutive_errors = 0
         self.is_downgraded = False
@@ -93,6 +97,9 @@ class DownloadManager:
         self.stop_event.clear()
         self.start_time = time.time()
         self._disk_pause_logged = False
+        with self.lock:
+            self.bytes_downloaded = 0
+            self._byte_events.clear()
 
         self.workers = []
 
@@ -332,12 +339,37 @@ class DownloadManager:
                 self.on_rate_update(rate, self.active_threads)
 
     def report_bytes(self, count: int):
+        """累计下载字节，并写入滑动窗口用于瞬时速率。"""
+        if count <= 0:
+            return
+        now = time.time()
         with self.lock:
             self.bytes_downloaded += count
+            self._byte_events.append((now, count))
+            self._trim_byte_events(now)
+
+    def _trim_byte_events(self, now: Optional[float] = None) -> None:
+        """丢弃窗口外的采样。调用方若已持有 self.lock 可直接调用。"""
+        if now is None:
+            now = time.time()
+        cutoff = now - self.rate_window_seconds
+        while self._byte_events and self._byte_events[0][0] < cutoff:
+            self._byte_events.popleft()
 
     def get_rate(self) -> str:
-        elapsed = time.time() - self.start_time
-        if elapsed <= 0:
-            return "0 KB/s"
-        rate = (self.bytes_downloaded / 1024) / elapsed
-        return f"{rate:.1f} KB/s"
+        """基于最近 rate_window_seconds 的瞬时速率（KB/s）。"""
+        now = time.time()
+        with self.lock:
+            self._trim_byte_events(now)
+            if not self._byte_events:
+                return "0 KB/s"
+
+            window_bytes = sum(nbytes for _, nbytes in self._byte_events)
+            oldest_ts = self._byte_events[0][0]
+            # 用实际跨度，避免窗口刚开始时被固定 5s 分母压低
+            elapsed = max(now - oldest_ts, 1e-3)
+            # 单点采样时用极小时间会导致虚高，至少按 0.2s 估
+            if len(self._byte_events) == 1:
+                elapsed = max(elapsed, 0.2)
+            rate = (window_bytes / 1024.0) / elapsed
+            return f"{rate:.1f} KB/s"

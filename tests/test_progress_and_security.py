@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import threading
+import time
 import unittest
 from unittest.mock import MagicMock
 
 from src.client import _redact_headers, _truncate_text
+from src.download_manager import DownloadManager
 from src.progress_ui import bind_download_progress, create_download_progress
 
 
@@ -69,6 +71,47 @@ class ProgressBindTest(unittest.TestCase):
             column_types.index("TaskProgressColumn"),
             column_types.index("MofNCompleteColumn"),
         )
+
+class SlidingRateTest(unittest.TestCase):
+    def test_rate_uses_recent_window_not_lifetime_average(self):
+        mgr = DownloadManager()
+        mgr.rate_window_seconds = 5.0
+        # 模拟：很久以前下了很多，最近几乎没下 -> 瞬时应接近 0，而不是被历史均值抬高
+        old = time.time() - 30
+        with mgr.lock:
+            mgr.bytes_downloaded = 10 * 1024 * 1024  # 10MB 历史总量
+            mgr._byte_events.append((old, 10 * 1024 * 1024))
+            mgr.start_time = old
+        # 修剪后窗口应为空
+        self.assertEqual(mgr.get_rate(), "0 KB/s")
+
+    def test_rate_reflects_recent_burst(self):
+        mgr = DownloadManager()
+        mgr.rate_window_seconds = 5.0
+        now = time.time()
+        # 在窗口内写入约 100KB，跨度约 1s
+        with mgr.lock:
+            mgr._byte_events.append((now - 1.0, 50 * 1024))
+            mgr._byte_events.append((now - 0.1, 50 * 1024))
+            mgr.bytes_downloaded = 100 * 1024
+        rate_str = mgr.get_rate()
+        self.assertTrue(rate_str.endswith("KB/s"))
+        value = float(rate_str.split()[0])
+        # 100KB / ~1s ≈ 100 KB/s，允许一定误差
+        self.assertGreater(value, 50.0)
+        self.assertLess(value, 200.0)
+
+    def test_report_bytes_appends_and_trims(self):
+        mgr = DownloadManager()
+        mgr.rate_window_seconds = 1.0
+        mgr.report_bytes(1024)
+        self.assertEqual(len(mgr._byte_events), 1)
+        # 手工塞入过期事件再 report 触发 trim
+        with mgr.lock:
+            mgr._byte_events.appendleft((time.time() - 10, 999))
+        mgr.report_bytes(2048)
+        # 过期事件应被裁掉，仅保留窗口内
+        self.assertTrue(all(time.time() - ts <= 1.5 for ts, _ in mgr._byte_events))
 
 
 if __name__ == "__main__":
