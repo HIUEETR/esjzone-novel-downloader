@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import pickle
 import re
 import threading
 import time
@@ -17,14 +16,6 @@ import requests
 from bs4 import BeautifulSoup
 from PIL import Image
 from requests.exceptions import RequestException
-from rich.progress import (
-    BarColumn,
-    Progress,
-    SpinnerColumn,
-    TaskProgressColumn,
-    TextColumn,
-    TimeRemainingColumn,
-)
 
 from .config_loader import config
 from .cookie_manager import cookie_manager
@@ -33,6 +24,40 @@ from .epub import build_epub
 from .logger_config import logger
 from .model import Book, Chapter
 from .parser import parse_book, parse_chapter, parse_favorites, parse_novel_status
+from .progress_ui import bind_download_progress, create_download_progress
+
+
+
+
+_SENSITIVE_HEADER_NAMES = {
+    "cookie",
+    "set-cookie",
+    "authorization",
+    "proxy-authorization",
+    "x-api-key",
+    "x-auth-token",
+}
+
+
+def _redact_headers(headers: dict | None) -> dict:
+    """脱敏请求/响应头中的敏感字段，避免 Cookie/Token 写入 debug 文件。"""
+    if not headers:
+        return {}
+    redacted = {}
+    for key, value in dict(headers).items():
+        if str(key).lower() in _SENSITIVE_HEADER_NAMES:
+            redacted[key] = "[REDACTED]"
+        else:
+            redacted[key] = value
+    return redacted
+
+
+def _truncate_text(text: str, limit: int = 8192) -> str:
+    if text is None:
+        return ""
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"\n...[truncated {len(text) - limit} chars]"
 
 
 class EsjzoneDownloader:
@@ -82,21 +107,42 @@ class EsjzoneDownloader:
             logger.info(f"从默认路径加载了 {len(loaded_cookies)} 个 Cookie")
 
     def _load_cookies(self, cookies: Union[Dict, CookieJar, str, Path]) -> None:
-        """加载指定 Cookie 到会话中"""
+        """加载指定 Cookie 到会话中（仅支持 JSON / dict / CookieJar，不再支持 pickle）。"""
         try:
             if isinstance(cookies, (str, Path)):
                 path = Path(cookies)
-                if path.exists():
-                    if path.suffix == ".pkl":
-                        with open(path, "rb") as f:
-                            self.session.cookies.update(pickle.load(f))
-                    elif path.suffix == ".json":
-                        with open(path, "r") as f:
-                            data = json.load(f)
-                            if isinstance(data, dict):
-                                self.session.cookies.update(data)
+                if not path.exists():
+                    logger.warning(f"Cookie 文件不存在: {path}")
+                    return
+                if path.suffix.lower() == ".pkl":
+                    logger.error(
+                        f"已禁用 pickle Cookie 加载（存在任意代码执行风险）: {path}"
+                    )
+                    return
+                if path.suffix.lower() == ".json":
+                    with open(path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        self.session.cookies.update(data)
+                    elif isinstance(data, list):
+                        for c in data:
+                            if not isinstance(c, dict) or "name" not in c:
+                                continue
+                            kwargs = {"path": c.get("path", "/")}
+                            if c.get("domain"):
+                                kwargs["domain"] = c.get("domain")
+                            self.session.cookies.set(c["name"], c["value"], **kwargs)
+                    else:
+                        logger.warning(f"无法识别的 Cookie JSON 结构: {path}")
+                        return
+                else:
+                    logger.warning(f"不支持的 Cookie 文件格式: {path.suffix}")
+                    return
             elif isinstance(cookies, (dict, CookieJar)):
                 self.session.cookies.update(cookies)
+            else:
+                logger.warning(f"不支持的 Cookie 类型: {type(cookies)}")
+                return
 
             logger.info(
                 f"成功加载 Cookie，当前会话共有 {len(self.session.cookies)} 个 Cookie"
@@ -124,6 +170,7 @@ class EsjzoneDownloader:
     ):
         """
         以线程安全的方式将调试信息转储到文件。
+        自动脱敏 Cookie 等敏感头，并截断响应正文，降低凭据泄漏风险。
         """
         try:
             # 仅在需要写入时创建目录
@@ -143,27 +190,35 @@ class EsjzoneDownloader:
             req_url = "N/A"
             req_headers = {}
 
-            if response:
+            if response is not None and response.request is not None:
                 req_url = response.request.url
                 req_headers = dict(response.request.headers)
-            elif request:
+            elif request is not None:
                 req_url = request.url
                 req_headers = dict(request.headers)
 
             debug_info.append(f"请求 URL: {req_url}")
             debug_info.append("请求头:")
-            debug_info.append(json.dumps(req_headers, indent=2, default=str))
+            debug_info.append(
+                json.dumps(_redact_headers(req_headers), indent=2, default=str)
+            )
 
             # 提取响应信息
-            if response:
+            if response is not None:
                 debug_info.append(f"响应状态码: {response.status_code}")
                 debug_info.append("响应头:")
                 debug_info.append(
-                    json.dumps(dict(response.headers), indent=2, default=str)
+                    json.dumps(
+                        _redact_headers(dict(response.headers)), indent=2, default=str
+                    )
                 )
                 debug_info.append("-" * 80)
                 debug_info.append("响应正文:")
-                debug_info.append(response.text)
+                try:
+                    body_text = response.text
+                except Exception:
+                    body_text = "<unreadable body>"
+                debug_info.append(_truncate_text(body_text))
             else:
                 debug_info.append("响应状态码: N/A")
                 debug_info.append("响应头: N/A")
@@ -172,8 +227,9 @@ class EsjzoneDownloader:
 
             content = "\n".join(debug_info)
 
-            with file_path.open("w", encoding="utf-8") as f:
-                f.write(content)
+            with self._lock:
+                with file_path.open("w", encoding="utf-8") as f:
+                    f.write(content)
 
             logger.debug(f"调试信息已保存到: {file_path}")
 
@@ -185,12 +241,14 @@ class EsjzoneDownloader:
         """
         统一的请求封装，确保 Cookie 自动管理并统一处理异常。
         使用上下文管理器以捕获解析阶段的异常。
+        对 session.request 加锁，降低多线程共享 Session 的竞态风险。
         """
         response = None
         try:
             # 执行请求
             logger.debug(f"正在请求: {url}")
-            response = self.session.request(method, url, **kwargs)
+            with self._lock:
+                response = self.session.request(method, url, **kwargs)
 
             # 检查 HTTP 错误
             if not response.ok:
@@ -541,36 +599,13 @@ class EsjzoneDownloader:
         # 启动异步下载管理器
         manager = DownloadManager()
 
-        # 初始化进度条 (Rich)
-        progress = Progress(
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeRemainingColumn(),
-            SpinnerColumn(),
-            TextColumn("{task.fields[info]}"),
+        # 初始化进度条 (Rich): 百分比 + completed/total，图片 total 可动态增长
+        progress = create_download_progress()
+        progress_callback, rate_callback = bind_download_progress(
+            progress,
+            len(book.chapters) - 1,
+            lock=self._pbar_lock,
         )
-
-        chapter_task_id = progress.add_task(
-            "下载章节", total=len(book.chapters) - 1, info=""
-        )
-        image_task_id = progress.add_task("下载图片", total=0, info="")
-
-        def progress_callback(type, completed, total):
-            if type == "chapter":
-                progress.update(chapter_task_id, completed=completed, total=total)
-            else:
-                progress.update(
-                    image_task_id,
-                    completed=completed,
-                    total=total if total > 0 else None,
-                )
-
-        def rate_callback(rate, threads):
-            info_str = f"速率: {rate}, 线程: {threads}"
-            progress.update(chapter_task_id, info=info_str)
-            progress.update(image_task_id, info=info_str)
-
         manager.on_progress = progress_callback
         manager.on_rate_update = rate_callback
 
@@ -1044,35 +1079,12 @@ class EsjzoneDownloader:
 
         manager = DownloadManager()
 
-        progress = Progress(
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeRemainingColumn(),
-            SpinnerColumn(),
-            TextColumn("{task.fields[info]}"),
+        progress = create_download_progress()
+        progress_callback, rate_callback = bind_download_progress(
+            progress,
+            len(target_chapters),
+            lock=self._pbar_lock,
         )
-
-        chapter_task_id = progress.add_task(
-            "下载章节", total=len(target_chapters), info=""
-        )
-        image_task_id = progress.add_task("下载图片", total=0, info="")
-
-        def progress_callback(type, completed, total):
-            if type == "chapter":
-                progress.update(chapter_task_id, completed=completed, total=total)
-            else:
-                progress.update(
-                    image_task_id,
-                    completed=completed,
-                    total=total if total > 0 else None,
-                )
-
-        def rate_callback(rate, threads):
-            info_str = f"速率: {rate}, 线程: {threads}"
-            progress.update(chapter_task_id, info=info_str)
-            progress.update(image_task_id, info=info_str)
-
         manager.on_progress = progress_callback
         manager.on_rate_update = rate_callback
 

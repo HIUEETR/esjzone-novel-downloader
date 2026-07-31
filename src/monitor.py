@@ -11,7 +11,6 @@ from rich.progress import (
     TextColumn,
     BarColumn,
     TaskProgressColumn,
-    TimeRemainingColumn,
 )
 
 
@@ -22,6 +21,7 @@ from src.utils import clear_screen, truncate_and_pad
 from src.parser import parse_book
 from src.download_manager import DownloadManager, ChapterTask
 from src.epub import build_epub
+from src.progress_ui import bind_download_progress, create_download_progress
 
 DATA_DIR = Path("data")
 MONITOR_FILE = DATA_DIR / "monitor.json"
@@ -398,36 +398,12 @@ class MonitorManager:
 
         manager = DownloadManager()
 
-        progress = Progress(
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            TaskProgressColumn(),
-            TimeRemainingColumn(),
-            SpinnerColumn(),
-            TextColumn("{task.fields[info]}"),
-        )
-
         chapter_total = len(target_chapters)
-        chapter_task_id = progress.add_task("下载章节", total=chapter_total, info="")
-        image_task_id = progress.add_task("下载图片", total=0, info="")
-
-        def progress_callback(type, completed, total):
-            if type == "chapter":
-                progress.update(
-                    chapter_task_id, completed=completed, total=chapter_total
-                )
-            else:
-                progress.update(
-                    image_task_id,
-                    completed=completed,
-                    total=total if total > 0 else None,
-                )
-
-        def rate_callback(rate, threads):
-            info_str = f"速率: {rate}, 线程: {threads}"
-            progress.update(chapter_task_id, info=info_str)
-            progress.update(image_task_id, info=info_str)
-
+        progress = create_download_progress()
+        progress_callback, rate_callback = bind_download_progress(
+            progress,
+            chapter_total,
+        )
         manager.on_progress = progress_callback
         manager.on_rate_update = rate_callback
 
