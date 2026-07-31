@@ -39,7 +39,6 @@
    git clone git@github.com:HIUEETR/esjzone-novel-downloader.git
    cd esjzone-novel-downloader
    ```
-
 2. **运行启动脚本**
    双击运行 `start.bat` 或在命令行中执行：
 
@@ -108,10 +107,6 @@ python main.py
 * [X] 登录
 * [X] 获取图片
 * [X] 获取小说
-
-## 🌟 Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=HIUEETR/esjzone-novel-downloader&type=Date)](https://star-history.com/#HIUEETR/esjzone-novel-downloader&Date)
 
 ## 🙏 致谢
 
