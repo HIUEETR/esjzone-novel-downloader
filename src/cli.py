@@ -40,7 +40,6 @@ def edit_account_menu():
     while True:
         clear_screen()
         current_username = config.account.get("username", "")
-        current_password = config.account.get("password") or ""
 
         choices = ["修改账号", "修改密码", "返回上一级菜单"]
 
@@ -59,13 +58,15 @@ def edit_account_menu():
                 config.save()
                 _try_login()
         elif choice == "修改密码":
-            new_password = questionary.password(
-                "请输入密码：", default=current_password
-            ).ask()
+            # 不预填明文密码，避免终端回显/剪贴板泄漏
+            new_password = questionary.password("请输入新密码：").ask()
             if new_password is not None:
-                config.set("account.password", new_password)
-                config.save()
-                _try_login()
+                if new_password == "":
+                    print("密码为空，已取消修改。")
+                else:
+                    config.set("account.password", new_password)
+                    config.save()
+                    _try_login()
         elif choice == "返回上一级菜单":
             break
 

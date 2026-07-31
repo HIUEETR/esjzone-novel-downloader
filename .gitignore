@@ -3,6 +3,7 @@ __pycache__
 .venv/
 web/
 *.yaml
+!config.example.yaml
 data/
 books/
 logs/

@@ -64,6 +64,7 @@ class DownloadManager:
         self.on_progress = None
         self.on_rate_update = None
         self._prefer_image = False
+        self._disk_pause_logged = False
 
     def add_chapter_task(self, task: ChapterTask):
         self.chapter_queue.put(task)
@@ -91,6 +92,7 @@ class DownloadManager:
         logger.info(f"正在启动下载管理器，使用 {self.max_threads} 个线程")
         self.stop_event.clear()
         self.start_time = time.time()
+        self._disk_pause_logged = False
 
         self.workers = []
 
@@ -108,6 +110,8 @@ class DownloadManager:
 
     def stop(self):
         self.stop_event.set()
+        # 解除磁盘暂停，避免 worker 卡在 pause_event 上
+        self.pause_event.set()
         for t in self.workers:
             t.join(timeout=1.0)
 
@@ -122,20 +126,49 @@ class DownloadManager:
                 break
             time.sleep(0.5)
 
+    def _wait_for_disk_space(self, min_free_mb: int = 200) -> bool:
+        """磁盘空间不足时暂停，并周期性复检；恢复后继续。返回是否可继续工作。"""
+        if self._check_disk_space(min_free_mb=min_free_mb):
+            if self._disk_pause_logged:
+                logger.info("磁盘空间已恢复，继续下载。")
+                self._disk_pause_logged = False
+            if not self.pause_event.is_set():
+                self.pause_event.set()
+            return True
+
+        if not self._disk_pause_logged:
+            logger.warning("磁盘空间不足！暂停下载，将定期复检。")
+            self._disk_pause_logged = True
+        self.pause_event.clear()
+
+        while not self.stop_event.is_set():
+            time.sleep(5)
+            if self._check_disk_space(min_free_mb=min_free_mb):
+                logger.info("磁盘空间已恢复，继续下载。")
+                self._disk_pause_logged = False
+                self.pause_event.set()
+                return True
+
+        return False
+
     def _worker_loop(self):
         while not self.stop_event.is_set():
-            self.pause_event.wait()
+            # 支持超时，便于 stop() 后及时退出
+            self.pause_event.wait(timeout=1.0)
+            if self.stop_event.is_set():
+                break
 
-            if not self._check_disk_space():
-                logger.warning("磁盘空间不足！暂停下载。")
-                self.pause_event.clear()
-                continue
+            if not self._wait_for_disk_space():
+                break
 
             if self.is_downgraded:
                 if threading.current_thread().name != "Worker-0":
                     time.sleep(1)
                     continue
 
+            task = None
+            task_type = None
+            acquired = False
             try:
                 task, task_type = self._dequeue_task()
                 if not task:
@@ -144,13 +177,15 @@ class DownloadManager:
 
                 with self.lock:
                     self.active_threads += 1
+                acquired = True
 
                 self._process_task(task, task_type)
 
             except Exception as e:
                 logger.error(f"工作线程错误: {e}")
             finally:
-                if task:
+                # 仅在真正领取并计入 active 的任务上结算，避免空转/异常路径双减
+                if acquired:
                     with self.lock:
                         self.active_threads -= 1
                         if task_type == "chapter":

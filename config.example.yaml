@@ -1,0 +1,18 @@
+account:
+  username: ""  # 你的 ESJZone 账号
+  password: ""  # 你的 ESJZone 密码（明文仅保存在本地 config.yaml，请勿提交到 Git）
+cookie:
+  path: data/cookies.json  # 存储登录状态的 Cookie 文件路径
+download:
+  dir: downloads  # 下载文件保存目录
+  download_format: epub  # 下载文件格式 (epub 或 txt)
+  naming_mode: book_name  # 文件名命名模式 (book_name 或 number)
+  use_book_dir: false  # 是否在每个小说目录下创建子目录
+  max_threads: 5  # 最大线程数
+  timeout_seconds: 180  # 超时时间（秒）
+  retry_attempts: 3  # 重试次数
+  retry_delays: [10, 15, 30]  # 重试延迟（秒）
+log:
+  dir: ./logs  # 日志文件保存目录
+  level: INFO  # 日志级别 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  retention: 5  # 日志文件保留天数
