@@ -9,8 +9,6 @@ from rich.progress import (
     Progress,
     SpinnerColumn,
     TextColumn,
-    BarColumn,
-    TaskProgressColumn,
 )
 
 

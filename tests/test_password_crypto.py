@@ -13,7 +13,6 @@ from src.password_crypto import (
     reveal_password,
     seal_password,
 )
-from src import config_loader as config_loader_module
 from src.config_loader import ConfigLoader
 
 
@@ -66,15 +65,22 @@ class ConfigPasswordIntegrationTest(unittest.TestCase):
 
     def test_upgrade_and_get_set(self):
         mid = "unit-test-machine"
-        with patch("src.password_crypto.machineid.id", return_value=mid), patch(
-            "src.config_loader.seal_password",
-            side_effect=lambda v, machine_id=None: seal_password(v, machine_id=mid),
-        ), patch(
-            "src.config_loader.reveal_password",
-            side_effect=lambda v, machine_id=None: reveal_password(v, machine_id=mid),
-        ), patch(
-            "src.config_loader.is_encrypted_password",
-            side_effect=is_encrypted_password,
+        with (
+            patch("src.password_crypto.machineid.id", return_value=mid),
+            patch(
+                "src.config_loader.seal_password",
+                side_effect=lambda v, machine_id=None: seal_password(v, machine_id=mid),
+            ),
+            patch(
+                "src.config_loader.reveal_password",
+                side_effect=lambda v, machine_id=None: reveal_password(
+                    v, machine_id=mid
+                ),
+            ),
+            patch(
+                "src.config_loader.is_encrypted_password",
+                side_effect=is_encrypted_password,
+            ),
         ):
             self.assertTrue(self.loader._upgrade_plaintext_password())
             stored = self.loader._raw_account()["password"]

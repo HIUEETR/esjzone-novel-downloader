@@ -27,8 +27,6 @@ from .parser import parse_book, parse_chapter, parse_favorites, parse_novel_stat
 from .progress_ui import bind_download_progress, create_download_progress
 
 
-
-
 _SENSITIVE_HEADER_NAMES = {
     "cookie",
     "set-cookie",
@@ -252,9 +250,7 @@ class EsjzoneDownloader:
             want_stream = bool(kwargs.pop("stream", False))
             with self._lock:
                 # stream=True: request() 在读完 headers 后返回，Set-Cookie 已写入 jar
-                response = self.session.request(
-                    method, url, stream=True, **kwargs
-                )
+                response = self.session.request(method, url, stream=True, **kwargs)
 
             # 检查 HTTP 错误（此时尚未（或未完全）消费 body）
             if not response.ok:

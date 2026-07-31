@@ -63,7 +63,9 @@ class ProgressBindTest(unittest.TestCase):
         self.assertEqual(progress.update.call_args_list[2].kwargs["total"], 5)
 
         # rate updates both tasks
-        self.assertIn("速率: 12.3 KB/s", progress.update.call_args_list[3].kwargs["info"])
+        self.assertIn(
+            "速率: 12.3 KB/s", progress.update.call_args_list[3].kwargs["info"]
+        )
 
     def test_create_progress_has_mofn_column(self):
         progress = create_download_progress()
@@ -99,6 +101,7 @@ class ProgressBindTest(unittest.TestCase):
         a = str(mofn2.render(image))
         b = str(mofn2.render(chapter))
         self.assertEqual(a.index("/"), b.index("/"), f"{a!r} vs {b!r}")
+
 
 class SlidingRateTest(unittest.TestCase):
     def test_rate_uses_recent_window_not_lifetime_average(self):
