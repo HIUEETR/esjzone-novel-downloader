@@ -435,9 +435,7 @@ def function_menu(downloader, favorites_manager):
                                         end = total_chapters
 
                                     if start > end:
-                                        print(
-                                            "起始章节不能大于结束章节，将交换两者..."
-                                        )
+                                        print("起始章节不能大于结束章节，将交换两者...")
                                         start, end = end, start
 
                                     print(

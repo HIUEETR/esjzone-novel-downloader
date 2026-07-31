@@ -1,8 +1,7 @@
 import json
 import threading
-import time
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rich.progress import (
     Progress,
@@ -129,7 +128,7 @@ class FavoritesManager:
                                 # 注意：future.result() 返回的是 (novels, total_pages) 元组
                                 novels, _ = future.result()
                                 results[page] = novels
-                            except Exception as e:
+                            except Exception:
                                 results[page] = []
                             finally:
                                 progress.advance(task_id)
